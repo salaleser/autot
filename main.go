@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -14,6 +15,17 @@ import (
 type config struct {
 	Token   string `json:"token"`
 	Version string `json:"version"`
+}
+
+func winduza() {
+	cmd := exec.Command("path")
+	err := cmd.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Waiting for command to finish...")
+	err = cmd.Wait()
+	log.Printf("Command finished with error: %v", err)
 }
 
 func main() {
@@ -35,9 +47,10 @@ func main() {
 		fmt.Printf("Failed to unmarshal JSON: %s", body)
 	}
 
-Reconnect:
+	// Reconnect:
 	slack, err := hanu.New(response.Token)
 	if err != nil {
+		winduza()
 		log.Println(err)
 		fmt.Print("Reconnecting... ")
 		for i := 30; i > 0; i-- {
@@ -47,7 +60,7 @@ Reconnect:
 		}
 		fmt.Println()
 		// log.Fatal(err)
-		goto Reconnect
+		// goto Reconnect
 	}
 
 	fmt.Println("Connected!")
