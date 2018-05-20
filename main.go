@@ -17,24 +17,13 @@ type config struct {
 	Version string `json:"version"`
 }
 
-func winduza() {
-	cmd := exec.Command("path")
-	err := cmd.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Waiting for command to finish...")
-	err = cmd.Wait()
-	log.Printf("Command finished with error: %v", err)
-}
-
 func main() {
 	f, err := os.Open("config.json")
 	if err != nil {
 		log.Fatal("Конфигурационный файл не найден!")
 	}
 
-	body := make([]byte, 68) //FIXME: hardcode!
+	body := make([]byte, 86) //FIXME: hardcode!
 
 	n1, err := f.Read(body)
 	if err != nil {
@@ -47,10 +36,9 @@ func main() {
 		fmt.Printf("Failed to unmarshal JSON: %s", body)
 	}
 
-	// Reconnect:
+Reconnect:
 	slack, err := hanu.New(response.Token)
 	if err != nil {
-		winduza()
 		log.Println(err)
 		fmt.Print("Reconnecting... ")
 		for i := 30; i > 0; i-- {
@@ -60,7 +48,7 @@ func main() {
 		}
 		fmt.Println()
 		// log.Fatal(err)
-		// goto Reconnect
+		goto Reconnect
 	}
 
 	fmt.Println("Connected!")
@@ -75,8 +63,20 @@ func main() {
 		fmt.Println(str)
 	})
 
+	slack.Command("q", func(conv hanu.ConversationInterface) {
+		out, err := exec.Command("sc").Output()
+		if err != nil {
+			log.Println(err)
+		}
+		conv.Reply("%s", out)
+	})
+
 	slack.Command("version", func(conv hanu.ConversationInterface) {
 		conv.Reply("Thanks for asking! I'm running `%s`", response.Version)
+	})
+
+	slack.Command("help", func(conv hanu.ConversationInterface) {
+		conv.Reply("`q` — тест", response.Version)
 	})
 
 	slack.Listen()
