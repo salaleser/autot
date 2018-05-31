@@ -83,11 +83,12 @@ Reconnect:
 	slack, err := hanu.New(response.Token)
 	if err != nil {
 		log.Println(err)
-		fmt.Print("Reconnecting in...")
+		fmt.Print("Reconnecting in... ")
 		for i := 30; i > 0; i-- {
 			time.Sleep(time.Second)
-			fmt.Println(i, " ")
+			fmt.Print(i, " ")
 		}
+		fmt.Println("Reconnecting now...")
 		goto Reconnect
 	}
 
