@@ -1,3 +1,7 @@
+// ...
+// Тут будет описание
+// ...
+
 package main
 
 import (
@@ -7,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,14 +19,14 @@ import (
 )
 
 const (
-	statusRunning = "4  RUNNING"
-	process       = "sc"
-	server        = "\\\\Kmisdevserv"
-	service       = "IBM Domino Server (DDOMINODATA)"
+	statusStopped      = "1  STOPPED"
+	statusStartPending = "2  START_PENDING"
+	statusStopPending  = "3  STOP_PENDING"
+	statusRunning      = "4  RUNNING"
 )
 
 var (
-	running     bool
+	status      int
 	lastStarted int64
 	lastStopped int64
 )
@@ -31,31 +36,11 @@ type config struct {
 	Version string `json:"version"`
 }
 
-func loopQuery() {
-	for {
-		out := runCommand("query")
-		running = strings.Contains(out, statusRunning)
-		if running {
-			if lastStarted < lastStopped {
-				lastStarted = time.Now().UnixNano()
-				fmt.Println("Служба запущена.")
-			}
-		} else {
-			if lastStarted > lastStopped {
-				lastStopped = time.Now().UnixNano()
-				fmt.Println("Служба остановлена!")
-			}
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-}
-
 func runCommand(s string) string {
-	out, err := exec.Command(process, server, s, service).Output()
+	out, err := exec.Command("sc", "\\\\Kmisdevserv", s, "IBM Domino Server (DDOMINODATA)").Output()
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	return string(out)
 }
 
@@ -79,6 +64,7 @@ func main() {
 		fmt.Printf("Failed to unmarshal JSON: %s", body)
 	}
 
+	log.Println("Connecting...")
 Reconnect:
 	slack, err := hanu.New(response.Token)
 	if err != nil {
@@ -92,9 +78,36 @@ Reconnect:
 		goto Reconnect
 	}
 
-	fmt.Println("Connected!")
+	log.Println("Connected!")
 
-	go loopQuery()
+	// Вечный цикл проверки статуса.
+	// 2 раза в секунду опрашивает состояние службы утилитой sc.exe, сравнивает ее
+	// вывод с константами и перезаписывает переменную status
+	go func() {
+		for {
+			out := runCommand("query")
+			if strings.Contains(out, statusRunning) {
+				status = 4
+				if lastStarted < lastStopped {
+					lastStarted = time.Now().UnixNano()
+					fmt.Println("Служба запущена.")
+				}
+			} else if strings.Contains(out, statusStopped) {
+				// FIXME: может произойти ситуация, когда служба служба успеет остановиться между
+				// итерациями этого цикла, тогда бот не сможет оповестить об остановке службы
+				status = 1
+				if lastStarted > lastStopped {
+					lastStopped = time.Now().UnixNano()
+					fmt.Println("Служба останавливается!")
+				}
+			} else if strings.Contains(out, statusStartPending) {
+				status = 2
+			} else if strings.Contains(out, statusStopPending) {
+				status = 3
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}()
 
 	// slack.Command("shout <word>", func(conv hanu.ConversationInterface) {
 	// 	str, _ := conv.String("word")
@@ -102,37 +115,56 @@ Reconnect:
 	// })
 
 	slack.Command("query", func(conv hanu.ConversationInterface) {
+		rndSource := rand.NewSource(time.Now().UnixNano())
+		rndRand := rand.New(rndSource)
+		rndInt := rndRand.Intn(100)
 		var msg string
-		if running {
-			rndSource := rand.NewSource(time.Now().UnixNano())
-			rndRand := rand.New(rndSource)
-			rndInt := rndRand.Intn(100)
+		switch status {
+		case 4:
 			if rndInt > 90 {
 				msg = "лотусист спит, служба идет..."
 			} else {
-				msg = "служба бежит..."
+				msg = "служба работает."
 			}
-		} else {
-			msg = "служба лежит!"
+		case 1:
+			if rndInt > 90 {
+				msg = "служба лежит!"
+			} else {
+				msg = "служба остановлена!"
+			}
+		case 2:
+			msg = "служба запускается..."
+		case 3:
+			msg = "служба останавливается..."
 		}
+		msg += "\nlastStarted = " + strconv.FormatInt(lastStarted, 10) +
+			" / lastStopped = " + strconv.FormatInt(lastStopped, 10)
 		conv.Reply("%s", msg)
 	})
 
 	slack.Command("stop", func(conv hanu.ConversationInterface) {
-		runCommand("stop")
-		conv.Reply("%s", "останавливаю...")
+		if status == 4 {
+			runCommand("stop")
+			conv.Reply("%s", "останавливаю...")
+		} else {
+			conv.Reply("%s", "сервис уже останавливается или остановлен.")
+		}
 	})
 
 	slack.Command("start", func(conv hanu.ConversationInterface) {
-		runCommand("start")
-		conv.Reply("%s", "запускаю...")
+		if status != 4 {
+			runCommand("start")
+			conv.Reply("%s", "запускаю...")
+		} else {
+			conv.Reply("%s", "сервис уже запущен.")
+		}
 	})
 
 	slack.Command("version", func(conv hanu.ConversationInterface) {
 		conv.Reply("`%s`", response.Version)
 	})
 
-	slack.Command("?", func(conv hanu.ConversationInterface) {
+	slack.Command("help", func(conv hanu.ConversationInterface) {
 		conv.Reply("`query` — проверка состояния службы;\n" +
 			"`start` — запустить службу;\n" +
 			"`stop` — остановить службу.")
