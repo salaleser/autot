@@ -240,8 +240,7 @@ Reconnect:
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!stop", // FIXME hardcode
-		"останавливает службу через указанное количество секунд",
+	cmd = hanu.NewCommand("!stop", "останавливает службу", // FIXME hardcode
 		func(conv hanu.ConversationInterface) {
 			var text string
 			var cancelled bool
@@ -323,41 +322,89 @@ Reconnect:
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!add <файлы,через,запятую>", "обновляет список отправляемых баз данных",
+	cmd = hanu.NewCommand("!add <файлы,через,запятую>", "обновляет список отправляемых файлов",
 		func(conv hanu.ConversationInterface) {
-			s, _ := conv.String("файлы,через,запятую")
-			files = strings.Split(s, ",")
-			conv.Reply("Список файлов обновлен. Дайте команду `!push` для отправки их в ОП.")
-			text := ""
-			for i := 1; i <= len(files); i++ {
-				n := strconv.FormatInt(int64(i), 10)
-				text += n + ". " + files[i-1] + "\n"
+			s, err := conv.String("файлы,через,запятую")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
 			}
-			conv.Reply("```" + text + "```")
+			newFiles := strings.Split(s, ",")
+			files = append(files, newFiles...)
+			conv.Reply("Список файлов обновлен. Дайте команду `!push` для отправки их в ОП.")
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!push", "копирует указанные в списке !db базы данных в ОП",
+	cmd = hanu.NewCommand("!rm <номер>", "удаляет файл из списка отправляемых по номеру",
+		func(conv hanu.ConversationInterface) {
+			s, err := conv.String("номер")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
+			}
+			n, err := strconv.Atoi(s)
+			if err != nil {
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
+			}
+			n--
+			if n < 0 || n > len(files) {
+				conv.Reply("```Ошибка!\nИндекс вне массива.```")
+				return
+			}
+			f := files[n]
+
+			// FIXME Не очень красивое решение
+			var newFiles []string
+			for _, file := range files {
+				if file != f {
+					newFiles = append(newFiles, file)
+				}
+			}
+			files = newFiles
+
+			conv.Reply("Файл `" + f + "` удален из списка.")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!clear", "обнуляет список файлов",
+		func(conv hanu.ConversationInterface) {
+			files = []string{}
+			conv.Reply("Список файлов очищен.")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!status", "показывает список отправляемых файлов",
+		func(conv hanu.ConversationInterface) {
+			text := "Список отправляемых файлов:\n"
+			if len(files) > 0 {
+				for i := 1; i <= len(files); i++ {
+					n := strconv.FormatInt(int64(i), 10)
+					text += n + ". " + files[i-1] + "\n"
+				}
+			}
+			conv.Reply("```" + text + "```")
+			conv.Reply("(`!clear` — очистить список, `!rm` — удалить файл)")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!push", "_отправляет_ подготовленные файлы",
 		func(conv hanu.ConversationInterface) {
 			if len(files) == 0 {
 				conv.Reply("Список файлов пустой! Воспользуйтесь сначала командой `!add`.")
 				return
 			}
-			conv.Reply("Начинаю упаковку…")
 			y, m, d := time.Now().Date()
 			date := strconv.Itoa(y) + "-" + m.String() + "-" + strconv.Itoa(d)
 			fileName := "Templates_" + date + "_KMIS.zip"
 			if err := zipFiles(fileName, files); err != nil {
 				log.Fatal(err)
 			}
-			conv.Reply("Упаковка файлов завершена.")
-
-			conv.Reply("Начинаю копирование…")
 			_, err := exec.Command("xcopy", fileName, destPath, "/Y").Output()
 			if err != nil {
 				log.Fatal(err)
 			}
-			conv.Reply("Копирование архива `" + fileName + "` в КМИС ОП завершено.")
+			conv.Reply("Архив с шаблонами в КМИС ОП (`" + fileName + "`).")
 		})
 	slack.Register(cmd)
 
@@ -367,7 +414,8 @@ Reconnect:
 			signedTemplates, err := Unzip(destPath+
 				"\\Подписанные\\"+"Templates_388_2018-06-21_KMIS.7z", "temp")
 			if err != nil {
-				log.Fatal(err)
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
 			}
 			conv.Reply("Распаковка файлов завершена.")
 
@@ -375,7 +423,8 @@ Reconnect:
 			for _, template := range signedTemplates {
 				_, err := exec.Command("xcopy", "temp\\"+template, "sourcePath", "/Y").Output()
 				if err != nil {
-					log.Fatal(err)
+					conv.Reply("```Ошибка!\n" + err.Error() + "```")
+					return
 				}
 			}
 			conv.Reply("Установка подписанных шаблонов завершена. //тест")
