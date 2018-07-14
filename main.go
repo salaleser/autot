@@ -24,25 +24,29 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	unarr "github.com/gen2brain/go-unarr"
 	"github.com/getlantern/systray"
 	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/icon"
 )
 
 const (
-	ver        = "0.5"
+	ver        = "0.6"
 	countdown  = 6 // количество секунд до остановки службы
-	sourcePath = "\\\\Kmisdevserv\\dominodata\\"
-	destPath   = "\\\\KSERVER\\!Common\\КМИС ОП"
+	pathTemp   = "temp\\"
+	pathData   = "\\\\Kmisdevserv\\dominodata\\"
+	pathBackup = "\\\\Kmisdevserv\\dominodata\\backup\\"
+	pathKmis   = "\\\\KSERVER\\!Common\\КМИС ОП"
+	pathSigned = "\\\\KSERVER\\!Common\\КМИС ОП\\Подписанные\\"
 )
 
 var (
@@ -75,6 +79,11 @@ var (
 
 	hook hanu.ConversationInterface // FIXME это костыль, смотри комментарий к команде @hook
 	item *systray.MenuItem
+
+	aliases = map[string]string{
+		"KMIS_main.ntf":   "Основной шаблон КМИС",
+		"CRDirectory.ntf": "Центральный справочник",
+	}
 )
 
 func execute(s string) string {
@@ -250,7 +259,7 @@ Reconnect:
 			case 2:
 				text = "Подождите, служба еще не запущена!"
 			case 3:
-				text = "Терпение, служба уже останавливается!"
+				text = "Проявите терпение, служба уже останавливается!"
 			case 4:
 				// TODO добавить отправку предупреждения в скайп
 				conv.Reply("*ВНИМАНИЕ!*\nСлужба будет остановлена через " +
@@ -330,6 +339,7 @@ Reconnect:
 				return
 			}
 			newFiles := strings.Split(s, ",")
+			// TODO добавить проверку на существование файла, правильность файла, дублирование
 			files = append(files, newFiles...)
 			conv.Reply("Список файлов обновлен. Дайте команду `!push` для отправки их в ОП.")
 		})
@@ -379,8 +389,11 @@ Reconnect:
 			text := "Список отправляемых файлов:\n"
 			if len(files) > 0 {
 				for i := 1; i <= len(files); i++ {
-					n := strconv.FormatInt(int64(i), 10)
-					text += n + ". " + files[i-1] + "\n"
+					alias, ok := aliases[files[i-1]]
+					if ok {
+						alias = " («" + alias + "»)"
+					}
+					text += strconv.Itoa(i) + ". " + files[i-1] + alias + "\n"
 				}
 			}
 			conv.Reply("```" + text + "```")
@@ -398,36 +411,87 @@ Reconnect:
 			date := strconv.Itoa(y) + "-" + m.String() + "-" + strconv.Itoa(d)
 			fileName := "Templates_" + date + "_KMIS.zip"
 			if err := zipFiles(fileName, files); err != nil {
-				log.Fatal(err)
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
 			}
-			_, err := exec.Command("xcopy", fileName, destPath, "/Y").Output()
+			_, err := exec.Command("xcopy", fileName, pathKmis, "/Y").Output()
 			if err != nil {
-				log.Fatal(err)
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
 			}
 			conv.Reply("Архив с шаблонами в КМИС ОП (`" + fileName + "`).")
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!pull", "ставит подписанные шаблоны (в разработке)",
+	cmd = hanu.NewCommand("!pull", "найдет файл в папке *Подписанные*, "+
+		"сохранит резервную копию старых файлов из папки *dominodata* в папку *dominodata\\backup* "+
+		"и распакует с заменой файлы из архива в папку *dominodata*",
 		func(conv hanu.ConversationInterface) {
-			conv.Reply("Начинаю распаковку…")
-			signedTemplates, err := Unzip(destPath+
-				"\\Подписанные\\"+"Templates_388_2018-06-21_KMIS.7z", "temp")
+
+			signedArchives, err := ioutil.ReadDir(pathSigned)
 			if err != nil {
-				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка при попытке прочитать файлы из папки" +
+					pathSigned + "!\n" + err.Error() + "```")
 				return
 			}
-			conv.Reply("Распаковка файлов завершена.")
+			if len(signedArchives) == 0 {
+				conv.Reply("```Ошибка!\nВ папке " + pathSigned + " нет файлов.```")
+				return
+			}
 
-			conv.Reply("Начинаю копирование…")
-			for _, template := range signedTemplates {
-				_, err := exec.Command("xcopy", "temp\\"+template, "sourcePath", "/Y").Output()
+			var signed os.FileInfo
+			if len(signedArchives) == 1 {
+				signed = signedArchives[0]
+				conv.Reply("выбран файл `" + pathSigned + signed.Name() + "`")
+			} else {
+				text := "Список подписанных архивов:\n"
+				for i := 1; i <= len(signedArchives); i++ {
+					n := strconv.FormatInt(int64(i), 10)
+					text += n + ". " + signedArchives[i-1].Name() + "\n"
+				}
+				conv.Reply("```" + text + "```")
+				// TODO распаковать и поставить шаблоны
+				conv.Reply("(`!pull <номер>` — распаковать и поставить шаблоны (в разработке))")
+			}
+
+			_, err = exec.Command("xcopy", pathSigned+signed.Name(), pathTemp, "/Y").Output()
+			if err != nil {
+				conv.Reply("```Ошибка при копировании архива во временную папку!\n" +
+					err.Error() + "```")
+				return
+			}
+
+			a, err := unarr.NewArchive(pathTemp + signed.Name())
+			if err != nil {
+				conv.Reply("```Ошибка инициализации архива " +
+					pathTemp + signed.Name() + "!\n" + err.Error() + "```")
+				return
+			}
+			defer a.Close()
+
+			signedFilenames, err := a.List()
+			if err != nil {
+				conv.Reply("```Ошибка при чтении имен файлов архива!\n" + err.Error() + "```")
+				return
+			}
+			for _, n := range signedFilenames {
+				_, err := exec.Command("xcopy", pathData+n, pathBackup, "/Y").Output()
 				if err != nil {
-					conv.Reply("```Ошибка!\n" + err.Error() + "```")
+					conv.Reply("```Ошибка при попытке резервного копирования файла " +
+						n + "!\n" + err.Error() + "```")
 					return
 				}
 			}
-			conv.Reply("Установка подписанных шаблонов завершена. //тест")
+
+			err = a.Extract(pathData)
+			if err != nil {
+				conv.Reply("```Ошибка при попытке распаковки архива!\n" + err.Error() + "```")
+				return
+			}
+
+			os.Remove(pathSigned + signed.Name())
+
+			conv.Reply("_Установка подписанных шаблонов завершена успешно._")
 		})
 	slack.Register(cmd)
 
@@ -446,7 +510,7 @@ func zipFiles(filename string, files []string) error {
 
 	for _, file := range files {
 
-		zipfile, err := os.Open(sourcePath + file)
+		zipfile, err := os.Open(pathData + file)
 		if err != nil {
 			return err
 		}
@@ -476,59 +540,4 @@ func zipFiles(filename string, files []string) error {
 		}
 	}
 	return nil
-}
-
-// Unzip will decompress a zip archive, moving all files and folders
-// within the zip file (parameter 1) to an output directory (parameter 2).
-func Unzip(src string, dest string) ([]string, error) {
-
-	var filenames []string
-
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return filenames, err
-	}
-	defer r.Close()
-
-	for _, f := range r.File {
-
-		rc, err := f.Open()
-		if err != nil {
-			return filenames, err
-		}
-		defer rc.Close()
-
-		// Store filename/path for returning and using later on
-		fpath := filepath.Join(dest, f.Name)
-		filenames = append(filenames, fpath)
-
-		if f.FileInfo().IsDir() {
-
-			// Make Folder
-			os.MkdirAll(fpath, os.ModePerm)
-
-		} else {
-
-			// Make File
-			if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
-				return filenames, err
-			}
-
-			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-			if err != nil {
-				return filenames, err
-			}
-
-			_, err = io.Copy(outFile, rc)
-
-			// Close the file without defer to close before next iteration of loop
-			outFile.Close()
-
-			if err != nil {
-				return filenames, err
-			}
-
-		}
-	}
-	return filenames, nil
 }
