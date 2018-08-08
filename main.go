@@ -29,10 +29,13 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/faiface/beep/speaker"
+	"github.com/faiface/beep/wav"
 	unarr "github.com/gen2brain/go-unarr"
 	"github.com/getlantern/systray"
 	"github.com/sbstjn/hanu"
@@ -40,8 +43,12 @@ import (
 )
 
 const (
-	ver        = "0.6"
-	countdown  = 6 // количество секунд до остановки службы
+	ver       = "0.7"
+	countdown = 6 // количество секунд до остановки службы
+
+	server  = "\\\\Kmisdevserv"
+	service = "IBM Domino Server (DDOMINODATA)"
+
 	pathTemp   = "temp\\"
 	pathData   = "\\\\Kmisdevserv\\dominodata\\"
 	pathBackup = "\\\\Kmisdevserv\\dominodata\\backup\\"
@@ -60,38 +67,104 @@ var (
 	}
 	tooltips = []string{
 		"Ванильный статус", // этот элемент никогда не используется
-		"Служба остановлена.",
+		"Служба остановлена",
 		"Служба запускается…",
 		"Служба останавливается!",
-		"Служба запущена.",
+		"Служба запущена",
 	}
-
-	lastStartPending int64
-	lastStopPending  int64
-	lastStopped      int64
-	lastStarted      int64
+	titles = []string{
+		"Ванильный статус", // этот элемент никогда не используется
+		"Запустить",
+		"Служба запускается…",     // копия из tooltips
+		"Служба останавливается!", // копия из tooltips
+		"Остановить",
+	}
+	alerts = []string{
+		"Ванильный статус", // этот элемент никогда не используется
+		"*СЛУЖБА ОСТАНОВЛЕНА*",
+		"*СЛУЖБА ЗАПУСКАЕТСЯ*",
+		"*СЛУЖБА ОСТАНАВЛИВАЕТСЯ*",
+		"*СЛУЖБА ЗАПУЩЕНА*",
+	}
+	iconsArray = [][]byte{
+		icons.Yellow, // этот элемент никогда не используется
+		icons.Red,
+		icons.Yellow,
+		icons.Red,
+		icons.Green,
+	}
+	timeLog = []int64{
+		0, // этот элемент никогда не используется
+		0, // lastStartPending int64
+		0, // lastStopPending  int64
+		0, // lastStopped      int64
+		0, // lastStarted      int64
+	}
 
 	about = "Autot (lite) " + ver
 
 	cooldown = 500
 
-	files []string
-
-	hook hanu.ConversationInterface // FIXME это костыль, смотри комментарий к команде @hook
-	item *systray.MenuItem
+	item     *systray.MenuItem
+	files    []string
+	convList []hanu.ConversationInterface
 
 	aliases = map[string]string{
-		"KMIS_main.ntf":   "Основной шаблон КМИС",
-		"CRDirectory.ntf": "Центральный справочник",
+		"KMIS_main.ntf":         "Основной шаблон КМИС",
+		"CRDirectory.ntf":       "Центральный справочник",
+		"MKCalendar6.ntf":       "Календарь КМИС",
+		"kmis_globkalendar.ntf": "Общий календарь ЛПУ",
+		"kmis_RSysDir.ntf":      "Региональная НСИ",
+		"kmis_FSysDir.ntf":      "Федеральная НСИ",
+		"SystemIntro.ntf":       "Начальная страница КМИС",
+		"kmis_mes.ntf":          "Справочник медицинских стандартов",
+		"kmis_frmstr.nsf":       "Печатные формы КМИС",
+		"MKCurrent2.ntf":        "Истории болезни",
+		"MKAmbul2.ntf":          "Амбулаторные карты",
+		"MKAmbul2M.ntf":         "Амбулаторные карты (mini)",
+		"MKPasport2.ntf":        "Паспортная часть",
+		"MKPasport2M.ntf":       "Паспортная часть (mini)",
+		"MKArhiv2.ntf":          "Архив документов",
+		"CSTrash.ntf":           "Корзина",
+		"kmisrir_iemk.ntf":      "Интегрированная ЭМК",
+		"kmis_kladr.ntf":        "Классификатор адресов",
+		"kmis_udlo.ntf":         "Региональная система лекарственного обеспечения",
 	}
 )
 
 func execute(s string) string {
-	o, err := exec.Command("sc", "\\\\Kmisdevserv", s, "IBM Domino Server (DDOMINODATA)").Output()
+	o, err := exec.Command("sc", server, s, service).Output()
 	if err != nil {
 		log.Println(err)
 	}
 	return string(o)
+}
+
+func beep() {
+	f, _ := os.Open("1.wav")
+	s, format, _ := wav.Decode(f)
+	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	speaker.Play(s)
+}
+
+func process() {
+	var n int8
+	if status == 4 {
+		n = 1
+	} else {
+		n = status + 1
+	}
+	if timeLog[n] >= timeLog[status] {
+		beep()
+		timeLog[status] = time.Now().Unix()
+		log.Println(tooltips[status])
+		item.SetTitle(titles[status])
+		systray.SetIcon(iconsArray[status])
+		systray.SetTooltip(tooltips[status])
+		for _, c := range convList {
+			c.Reply(alerts[status])
+		}
+	}
 }
 
 // Вечный цикл проверки статуса.
@@ -101,66 +174,27 @@ func loop() {
 	// TODO первое сообщение должно быть
 	// что-то вроде "на момент запуска бота служба была запущена"
 	for {
+		// TODO replace with switch or something
 		out := execute("query")
-		if strings.Contains(out, statuses[4]) { // TODO связать "statuses[x]" и "status = x"
+		if strings.Contains(out, statuses[4]) {
 			status = 4
-			if lastStopped >= lastStarted {
-				lastStarted = time.Now().Unix()
-				log.Println(tooltips[status])
-				item.SetTitle("Остановить")
-				// TODO звуковой сигнал
-				systray.SetIcon(icons.Green)
-				systray.SetTooltip(tooltips[status])
-				if hook != nil {
-					hook.Reply("*СЛУЖБА ЗАПУЩЕНА*")
-				}
-			}
+			process()
 		} else if strings.Contains(out, statuses[1]) {
 			status = 1
-			if lastStartPending >= lastStopped {
-				lastStopped = time.Now().Unix()
-				log.Println(tooltips[status])
-				item.SetTitle("Запустить")
-				// TODO звуковой сигнал
-				systray.SetIcon(icons.Red)
-				systray.SetTooltip(tooltips[status])
-				if hook != nil {
-					hook.Reply("*СЛУЖБА ОСТАНОВЛЕНА*")
-				}
-			}
+			process()
 		} else if strings.Contains(out, statuses[2]) {
 			status = 2
-			if lastStopPending >= lastStartPending {
-				lastStartPending = time.Now().Unix()
-				log.Println(tooltips[status])
-				item.SetTitle(tooltips[status])
-				// TODO звуковой сигнал
-				systray.SetIcon(icons.Yellow)
-				systray.SetTooltip(tooltips[status])
-				if hook != nil {
-					hook.Reply("*СЛУЖБА ЗАПУСКАЕТСЯ*")
-				}
-			}
+			process()
 		} else if strings.Contains(out, statuses[3]) {
 			status = 3
-			if lastStarted >= lastStopPending {
-				lastStopPending = time.Now().Unix()
-				log.Println(tooltips[status])
-				item.SetTitle(tooltips[status])
-				// TODO звуковой сигнал
-				systray.SetIcon(icons.Red)
-				systray.SetTooltip(tooltips[status])
-				if hook != nil {
-					hook.Reply("*СЛУЖБА ОСТАНАВЛИВАЕТСЯ*")
-				}
-			}
+			process()
 		}
 		time.Sleep(time.Duration(cooldown) * time.Millisecond)
 	}
 }
 
 func onReady() {
-	systray.SetIcon(icons.Yellow)
+	systray.SetIcon(iconsArray[2])
 	systray.SetTitle("Autot")
 	systray.SetTooltip("Автотправитель")
 	go func() {
@@ -223,7 +257,8 @@ Reconnect:
 	opStatus := make(chan bool) // канал для отмены остановки
 
 	var cmd hanu.Command
-	cmd = hanu.NewCommand("!query", "проверяет состояние службы", // FIXME hardcode
+	cmd = hanu.NewCommand("!query",
+		"проверяет состояние службы", // FIXME hardcode
 		func(conv hanu.ConversationInterface) {
 			isTimeToJoke := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(100) > 95
 			var text string
@@ -242,14 +277,15 @@ Reconnect:
 				if isTimeToJoke {
 					text = "Лотусист спит, служба идет…"
 				} else {
-					text = "Служба работает."
+					text = "Служба работает"
 				}
 			}
 			conv.Reply(text)
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!stop", "останавливает службу", // FIXME hardcode
+	cmd = hanu.NewCommand("!stop",
+		"останавливает службу", // FIXME hardcode
 		func(conv hanu.ConversationInterface) {
 			var text string
 			var cancelled bool
@@ -267,7 +303,7 @@ Reconnect:
 				for i := countdown; i > 0; i-- {
 					select {
 					case <-opStatus:
-						conv.Reply("Остановка службы отменена.")
+						conv.Reply("Остановка службы отменена")
 						// TODO добавить отправку предупреждения в скайп
 						cancelled = false // TODO вроде избыточная переменная, лучше придумать надо
 						break
@@ -284,7 +320,8 @@ Reconnect:
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!start", "запускает службу", // FIXME hardcode
+	cmd = hanu.NewCommand("!start",
+		"запускает службу", // FIXME hardcode
 		func(conv hanu.ConversationInterface) {
 			var text string
 			switch status {
@@ -302,14 +339,15 @@ Reconnect:
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!cancel", "отменяет запланированную остановку службы",
+	cmd = hanu.NewCommand("!cancel",
+		"отменяет запланированную остановку службы",
 		func(conv hanu.ConversationInterface) {
 			// TODO придумать красивый способ определять планируется ли остановка
 			if status == 4 {
 				opStatus <- true
 				fmt.Println("opStatus <- true") //debug
 			} else {
-				conv.Reply("Службу не планировалось останавливать.")
+				conv.Reply("Службу не планировалось останавливать")
 			}
 		})
 	slack.Register(cmd)
@@ -320,28 +358,102 @@ Reconnect:
 		})
 	slack.Register(cmd)
 
+	cmd = hanu.NewCommand("!aliases",
+		"показывает список алиасов шаблонов",
+		func(conv hanu.ConversationInterface) {
+			text := "Список алиасов шаблонов:\n"
+			columnWidth := 26
+			for filename, alias := range aliases {
+				spaces := columnWidth - len(filename)
+				if spaces < 1 {
+					spaces = 1
+				}
+				text += filename + strings.Repeat(" ", spaces) + alias + "\n"
+			}
+			conv.Reply("```" + text + "```")
+		})
+	slack.Register(cmd)
+
 	// Эта команда нужна только для присвоения переменной hook экземпляра Conversation.
 	// TODO Я пока не смог найти способ как публиковать сообщения ботом в произвольный канал.
-	cmd = hanu.NewCommand("!hook", "включает оповещение об изменении состояния Службы в этот канал",
+	cmd = hanu.NewCommand("!hook",
+		"включает оповещение об изменении состояния Службы в этот канал (в том числе и в ЛС)",
 		func(conv hanu.ConversationInterface) {
-			if hook == nil {
-				hook = conv
-				hook.Reply("Оповещения об изменении состояния Службы будут приходить в этот канал.")
+			for _, c := range convList {
+				if c == conv {
+					conv.Reply("Этот канал уже есть в списке оповещения.")
+					return
+				}
+			}
+
+			if len(convList) == 0 {
+				convList = append(convList, conv)
+				conv.Reply("Этот канал добавлен в список оповещения (в разработке).")
+			} else {
+				convList[0] = conv
+				conv.Reply("Канал из первого элемента списка заменен на этот канал (в разработке)")
 			}
 		})
 	slack.Register(cmd)
 
-	cmd = hanu.NewCommand("!add <файлы,через,запятую>", "обновляет список отправляемых файлов",
+	cmd = hanu.NewCommand("!add <файлы,через,запятую,без,пробелов>",
+		"обновляет список отправляемых файлов",
 		func(conv hanu.ConversationInterface) {
-			s, err := conv.String("файлы,через,запятую")
+			s, err := conv.String("файлы,через,запятую,без,пробелов")
 			if err != nil {
-				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка при разборе перечня файлов!\n" +
+					err.Error() + "```")
 				return
 			}
-			newFiles := strings.Split(s, ",")
-			// TODO добавить проверку на существование файла, правильность файла, дублирование
-			files = append(files, newFiles...)
-			conv.Reply("Список файлов обновлен. Дайте команду `!push` для отправки их в ОП.")
+			newFilenames := strings.Split(s, ",")
+			for _, newFilename := range newFilenames {
+				for _, file := range files {
+					if file == newFilename {
+						files = remove(newFilename)
+					}
+				}
+			}
+
+			allTemplates, err := ioutil.ReadDir(pathData)
+			if err != nil {
+				conv.Reply("```Ошибка при попытке прочитать файлы из папки" + pathData + "!\n" +
+					err.Error() + "```")
+				return
+			}
+
+			templatePattern, err := regexp.Compile("^\\w+\\.ntf$|^kmis_frmstr.nsf$")
+			if err != nil {
+				conv.Reply("```Ошибка!" + pathData + "!\n" +
+					err.Error() + "```")
+				return
+			}
+
+			var count int
+			for _, newFilename := range newFilenames {
+				for _, templateFile := range allTemplates {
+					if templateFile.IsDir() {
+						continue
+					}
+					if newFilename == templateFile.Name() {
+						if templatePattern.MatchString(newFilename) {
+							files = append(files, newFilename)
+							count++
+						} else {
+							conv.Reply("```Файл " + newFilename +
+								" не является шаблоном и не был добавлен в список!\n" +
+								"(не матчится по регекспу " + templatePattern.String() + ")```")
+						}
+					}
+				}
+			}
+			text := "Все файлы прошли проверку и были добавлены в список, " +
+				"дайте команду `!push` для отправки их в `" + pathKmis + "`"
+			if count == 0 {
+				text = "Ни один файл не прошел проверку (регистр учитывается)"
+			} else if count != len(newFilenames) {
+				text = "Не все файлы прошли проверку"
+			}
+			conv.Reply(text)
 		})
 	slack.Register(cmd)
 
@@ -359,19 +471,13 @@ Reconnect:
 			}
 			n--
 			if n < 0 || n > len(files) {
-				conv.Reply("```Ошибка!\nИндекс вне массива.```")
+				conv.Reply("```Ошибка выполнения команды `!rm`!\n" +
+					"Индекс вне массива.```")
 				return
 			}
 			f := files[n]
 
-			// FIXME Не очень красивое решение
-			var newFiles []string
-			for _, file := range files {
-				if file != f {
-					newFiles = append(newFiles, file)
-				}
-			}
-			files = newFiles
+			files = remove(f)
 
 			conv.Reply("Файл `" + f + "` удален из списка.")
 		})
@@ -403,23 +509,32 @@ Reconnect:
 
 	cmd = hanu.NewCommand("!push", "_отправляет_ подготовленные файлы",
 		func(conv hanu.ConversationInterface) {
+			if status != 1 {
+				conv.Reply("```Ошибка выполнения команды `!push`!\n" +
+					"Нельзя изменять шаблоны пока служба не остановлена.```")
+				return
+			}
+
 			if len(files) == 0 {
-				conv.Reply("Список файлов пустой! Воспользуйтесь сначала командой `!add`.")
+				conv.Reply("```Ошибка!\n" +
+					"Список файлов пустой! Воспользуйтесь сначала командой `!add`.```")
 				return
 			}
 			y, m, d := time.Now().Date()
 			date := strconv.Itoa(y) + "-" + m.String() + "-" + strconv.Itoa(d)
 			fileName := "Templates_" + date + "_KMIS.zip"
 			if err := zipFiles(fileName, files); err != nil {
-				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка при попытке архивировать шаблоны!\n" +
+					err.Error() + "```")
 				return
 			}
 			_, err := exec.Command("xcopy", fileName, pathKmis, "/Y").Output()
 			if err != nil {
-				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка!\n" +
+					err.Error() + "```")
 				return
 			}
-			conv.Reply("Архив с шаблонами в КМИС ОП (`" + fileName + "`).")
+			conv.Reply("Шаблоны в `" + pathKmis + "\\" + fileName + "`.")
 		})
 	slack.Register(cmd)
 
@@ -427,15 +542,21 @@ Reconnect:
 		"сохранит резервную копию старых файлов из папки *dominodata* в папку *dominodata\\backup* "+
 		"и распакует с заменой файлы из архива в папку *dominodata*",
 		func(conv hanu.ConversationInterface) {
+			if status != 1 {
+				conv.Reply("```Ошибка выполнения команды `!pull`!\n" +
+					"Нельзя изменять шаблоны пока служба не остановлена.```")
+				return
+			}
 
 			signedArchives, err := ioutil.ReadDir(pathSigned)
 			if err != nil {
-				conv.Reply("```Ошибка при попытке прочитать файлы из папки" +
-					pathSigned + "!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка при попытке прочитать файлы из папки" + pathSigned + "!\n" +
+					err.Error() + "```")
 				return
 			}
 			if len(signedArchives) == 0 {
-				conv.Reply("```Ошибка!\nВ папке " + pathSigned + " нет файлов.```")
+				conv.Reply("```Ошибка при попытке найти подходящий файл для распаковки!\n" +
+					"В папке " + pathSigned + " нет файлов.```")
 				return
 			}
 
@@ -463,8 +584,8 @@ Reconnect:
 
 			a, err := unarr.NewArchive(pathTemp + signed.Name())
 			if err != nil {
-				conv.Reply("```Ошибка инициализации архива " +
-					pathTemp + signed.Name() + "!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка инициализации архива " + pathTemp + signed.Name() + "!\n" +
+					err.Error() + "```")
 				return
 			}
 			defer a.Close()
@@ -477,15 +598,17 @@ Reconnect:
 			for _, n := range signedFilenames {
 				_, err := exec.Command("xcopy", pathData+n, pathBackup, "/Y").Output()
 				if err != nil {
-					conv.Reply("```Ошибка при попытке резервного копирования файла " +
-						n + "!\n" + err.Error() + "```")
+					conv.Reply("```Ошибка при попытке резервного копирования файла " + n + "!\n" +
+						err.Error() + "```")
 					return
 				}
+				os.Remove(pathData + n)
 			}
 
 			err = a.Extract(pathData)
 			if err != nil {
-				conv.Reply("```Ошибка при попытке распаковки архива!\n" + err.Error() + "```")
+				conv.Reply("```Ошибка при попытке распаковки архива!\n" +
+					err.Error() + "```")
 				return
 			}
 
@@ -495,7 +618,32 @@ Reconnect:
 		})
 	slack.Register(cmd)
 
+	cmd = hanu.NewCommand("!pull <номер>",
+		"ставит шаблоны из номера архива, указанного в аргументе",
+		func(conv hanu.ConversationInterface) {
+			if status != 1 {
+				conv.Reply("```Ошибка!\n" +
+					"Нельзя изменять шаблоны пока служба не остановлена.```")
+				return
+			}
+
+			conv.Reply("Ничего не сделано, команда в разработке." +
+				"Временное решение: оставьте один архив в папке " + pathSigned)
+
+		})
+	slack.Register(cmd)
+
 	slack.Listen()
+}
+
+func remove(f string) []string {
+	var a []string
+	for _, file := range files {
+		if file != f {
+			a = append(a, file)
+		}
+	}
+	return a
 }
 
 func zipFiles(filename string, files []string) error {
