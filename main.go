@@ -43,12 +43,15 @@ import (
 )
 
 const (
-	ver       = "0.7"
-	countdown = 6 // количество секунд до остановки службы
+	// TODO Перенести в конфиг
+	ver                = "0.8"
+	templateDateFormat = "2006-01-02_15-04"
 
+	// TODO Перенести в конфиг
 	server  = "\\\\Kmisdevserv"
 	service = "IBM Domino Server (DDOMINODATA)"
 
+	// TODO Перенести в конфиг
 	pathTemp   = "temp\\"
 	pathData   = "\\\\Kmisdevserv\\dominodata\\"
 	pathBackup = "\\\\Kmisdevserv\\dominodata\\backup\\"
@@ -57,7 +60,8 @@ const (
 )
 
 var (
-	status   int8 // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+	status int8 // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+
 	statuses = []string{
 		"0  ВАНИЛЬНЫЙ_СТАТУС", // этот элемент никогда не используется
 		"1  STOPPED",
@@ -101,14 +105,47 @@ var (
 		0, // lastStarted      int64
 	}
 
-	about = "Autot (lite) " + ver
+	about = "Autot Client " + ver
 
-	cooldown = 500
+	countdown = 6 // количество секунд до остановки службы
+	cooldown  = 500
 
 	item     *systray.MenuItem
 	files    []string
 	convList []hanu.ConversationInterface
 
+	rpsRock      = ":fist: *КАМЕНЬ*"
+	rpsPaper     = ":hand: *БУМАГА*"
+	rpsScissors  = ":v: *НОЖНИЦЫ*"
+	rpsEnabled   bool
+	rpsCountdown = 15
+	rpsMessage   = " начал состязание! " + strconv.Itoa(rpsCountdown) +
+		" секунд на ответ! (`!r` — камень, `!s` — ножницы, `!p` — бумага)"
+	rpsActions = []string{
+		" _смотрит сурово..._",
+		" _хмурит брови..._",
+		" _напрягся..._",
+		" _уверенно стоит на ногах..._",
+		" _постукивает ногой в такт музыки..._",
+		" _затаился в укрытии..._",
+		" _готовится к выпаду..._",
+		" _внимательно рассматривает свою ладонь..._",
+		" _сосредоточенно разглядывает пиксель..._",
+		" _сдержанно улыбается..._",
+		" _ожидает результатов..._",
+		" _задумчиво смотрит в даль..._",
+		" _заметно нервничает..._",
+		" _разглядывает пятно на полу..._",
+		" _выглядит гордым..._",
+	}
+	players = make(map[string]string)
+
+	voteEnabled bool
+	voteChan    = make(chan bool)
+	votes       = 3
+	voters      []string
+
+	// TODO Перенести в отдельный файл
 	aliases = map[string]string{
 		"KMIS_main.ntf":         "Основной шаблон КМИС",
 		"CRDirectory.ntf":       "Центральный справочник",
@@ -129,6 +166,20 @@ var (
 		"kmisrir_iemk.ntf":      "Интегрированная ЭМК",
 		"kmis_kladr.ntf":        "Классификатор адресов",
 		"kmis_udlo.ntf":         "Региональная система лекарственного обеспечения",
+		"kmis_labserv.ntf":      "Web-сервисы интеграции",
+		"MKAKPasp.ntf":          "Паспорт поликлиники",
+		"kmis_globdir.ntf":      "Глобальный справочник КМИС",
+		"kmis_Autopsy.ntf":      "Журнал патанатомии",
+		"kmis_usl.ntf":          "Услуги для КМИС",
+	}
+
+	// FIXME hardcode
+	lotusmen = map[string]string{
+		"UC7GRMGA2": "Максим Паничев",
+		"UAQAL4NPR": "Алексей Салиенко",
+		"UA63MNKHR": "Павел Боровинский",
+		"UAQC2EAUX": "Андрей Бородулин",
+		"UANLUENDP": "Александр Кирпу",
 	}
 )
 
@@ -195,7 +246,7 @@ func loop() {
 
 func onReady() {
 	systray.SetIcon(iconsArray[2])
-	systray.SetTitle("Autot")
+	systray.SetTitle("Autot Server")
 	systray.SetTooltip("Автотправитель")
 	go func() {
 		systray.AddMenuItem(about, "Автотправитель")
@@ -287,6 +338,8 @@ Reconnect:
 	cmd = hanu.NewCommand("!stop",
 		"останавливает службу", // FIXME hardcode
 		func(conv hanu.ConversationInterface) {
+			startPoll(conv)
+
 			var text string
 			var cancelled bool
 			switch status {
@@ -421,27 +474,58 @@ Reconnect:
 				return
 			}
 
-			templatePattern, err := regexp.Compile("^\\w+\\.ntf$|^kmis_frmstr.nsf$")
+			patternTemplateWithoutExtension, err := regexp.Compile("^\\w+$")
 			if err != nil {
-				conv.Reply("```Ошибка!" + pathData + "!\n" +
+				conv.Reply("```Ошибка!\n" +
 					err.Error() + "```")
 				return
 			}
 
+			patternDatabaseWithoutExtension, err := regexp.Compile("^kmis_frmstr$")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" +
+					err.Error() + "```")
+				return
+			}
+
+			patternTemplate, err := regexp.Compile("^\\w+\\.ntf$")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" +
+					err.Error() + "```")
+				return
+			}
+
+			patternDatabase, err := regexp.Compile("^kmis_frmstr\\.nsf$")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" +
+					err.Error() + "```")
+				return
+			}
+
+			const templateExtension = ".ntf"
+			const databaseExtension = ".nsf"
 			var count int
 			for _, newFilename := range newFilenames {
 				for _, templateFile := range allTemplates {
 					if templateFile.IsDir() {
 						continue
 					}
+
+					if patternDatabaseWithoutExtension.MatchString(newFilename) {
+						newFilename = newFilename + databaseExtension
+					} else if patternTemplateWithoutExtension.MatchString(newFilename) {
+						newFilename = newFilename + templateExtension
+					}
+
+					isTemplate := patternTemplate.MatchString(newFilename)
+					isDatabase := patternDatabase.MatchString(newFilename)
 					if newFilename == templateFile.Name() {
-						if templatePattern.MatchString(newFilename) {
+						if isTemplate || isDatabase {
 							files = append(files, newFilename)
 							count++
 						} else {
 							conv.Reply("```Файл " + newFilename +
-								" не является шаблоном и не был добавлен в список!\n" +
-								"(не матчится по регекспу " + templatePattern.String() + ")```")
+								" не подходит и не был добавлен в список!\n```")
 						}
 					}
 				}
@@ -520,15 +604,16 @@ Reconnect:
 					"Список файлов пустой! Воспользуйтесь сначала командой `!add`.```")
 				return
 			}
-			y, m, d := time.Now().Date()
-			date := strconv.Itoa(y) + "-" + m.String() + "-" + strconv.Itoa(d)
+
+			time := time.Now()
+			date := time.Format(templateDateFormat)
 			fileName := "Templates_" + date + "_KMIS.zip"
 			if err := zipFiles(fileName, files); err != nil {
 				conv.Reply("```Ошибка при попытке архивировать шаблоны!\n" +
 					err.Error() + "```")
 				return
 			}
-			_, err := exec.Command("xcopy", fileName, pathKmis, "/Y").Output()
+			_, err = exec.Command("xcopy", fileName, pathKmis, "/Y").Output()
 			if err != nil {
 				conv.Reply("```Ошибка!\n" +
 					err.Error() + "```")
@@ -629,7 +714,59 @@ Reconnect:
 
 			conv.Reply("Ничего не сделано, команда в разработке." +
 				"Временное решение: оставьте один архив в папке " + pathSigned)
+		})
+	slack.Register(cmd)
 
+	cmd = hanu.NewCommand("!user",
+		"узнать свой идентификатор (никогда не знаешь что может пригодиться)",
+		func(conv hanu.ConversationInterface) {
+			user := conv.Message().User()
+			conv.Reply("`" + user + "`")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!r",
+		"камень",
+		func(conv hanu.ConversationInterface) {
+			user := conv.Message().User()
+			playRps(user, rpsRock)
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!s",
+		"ножницы",
+		func(conv hanu.ConversationInterface) {
+			user := conv.Message().User()
+			playRps(user, rpsScissors)
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!p",
+		"бумага",
+		func(conv hanu.ConversationInterface) {
+			user := conv.Message().User()
+			playRps(user, rpsPaper)
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("\\+", // надо экранировать плюс иначе падает hanu
+		"положительный ответ при голосовании (правильно `+`)",
+		func(conv hanu.ConversationInterface) {
+			if voteEnabled {
+				user := conv.Message().User()
+				vote(user, true)
+			}
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("\\-", // надо экранировать плюс иначе падает hanu
+		"отрицательный ответ при голосовании (правильно `-`)",
+		func(conv hanu.ConversationInterface) {
+			if voteEnabled {
+				user := conv.Message().User()
+				vote(user, false)
+				conv.Reply("Голосование отменено пользователем " + lotusmen[user])
+			}
 		})
 	slack.Register(cmd)
 
@@ -644,6 +781,80 @@ func remove(f string) []string {
 		}
 	}
 	return a
+}
+
+// TODO доделать команду
+func startPoll(conv hanu.ConversationInterface) {
+	voters = []string{}
+	voteEnabled = true
+	conv.Reply("Запущено голосование за остановку службы. Необходимо получить еще " +
+		strconv.Itoa(votes-1) + " голоса. Для голосования достаточно поставить знак `+`.")
+	conv.Reply("Скрестите шпаги, лотусисты!")
+
+	user := conv.Message().User()
+	vote(user, true)
+
+	<-voteChan
+	voteMessage := "Голосование завершено успешно. Список голосовавших:\n"
+	for i := 0; i < len(voters); i++ {
+		lotusman, ok := lotusmen[voters[i]]
+		if !ok {
+			lotusman = voters[i]
+		}
+		voteMessage += lotusman + "\n"
+	}
+	conv.Reply("```" + voteMessage + "```")
+}
+
+func vote(user string, isPositive bool) {
+	if isPositive {
+		voters = append(voters, user)
+		if votes > len(voters) {
+			return
+		}
+		voteChan <- true
+	}
+	voteEnabled = false
+}
+
+func playRps(user string, rps string) {
+	username, ok := lotusmen[user]
+	if !ok {
+		username = user
+	}
+
+	if !rpsEnabled {
+		players = make(map[string]string)
+		rpsEnabled = true
+		convList[0].Reply(username + rpsMessage)
+		go startRps()
+	}
+	players[username] = rps
+}
+
+func startRps() {
+	for i := rpsCountdown; i > 0; i-- {
+		time.Sleep(time.Second)
+	}
+	convList[0].Reply("Состязание завершено! Убрать шпаги в ножны!")
+
+	resultMessage := "*Итоги состязания:*\n"
+	var playersList []string
+	for player, rps := range players {
+		playersList = append(playersList, player)
+		resultMessage += player + " _выбрал_ " + rps + "\n"
+	}
+	convList[0].Reply(resultMessage + "\n_Идет подсчет результатов..._")
+
+	for i := 4; i > 0; i-- {
+		time.Sleep(time.Second)
+		randomPlayer := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(playersList))
+		randomAction := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(rpsActions))
+		convList[0].Reply(playersList[randomPlayer] + rpsActions[randomAction])
+	}
+	convList[0].Reply("_А впрочем, считайте сами, я все равно пока сам не умею_ :man-shrugging:")
+
+	rpsEnabled = false
 }
 
 func zipFiles(filename string, files []string) error {
