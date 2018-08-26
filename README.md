@@ -9,3 +9,19 @@
 ## Клиентская версия
 Это версия бота для запуска на клиенте.
 Также висит в трее винды как и полная версия, но без слэк-бота.
+
+# Необходимые файлы
+Для работы нужен файл настроек `config` со следующими ключами:
+```
+ver=версия
+templateDateFormat=2006-01-02_15-04
+server=\\server-path
+service=service-name
+pathTemp=temp\
+pathData=\\server-path\folder-name\
+pathBackup=\\server-path\folder-name\backup\
+pathKmis=\\server2-path\folder-name
+pathSigned=\\server2-path\folder-name\folder2-name\
+countdown=6
+cooldown=500
+```
