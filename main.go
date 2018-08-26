@@ -43,24 +43,7 @@ import (
 	"salaleser.ru/autot/icon"
 )
 
-const (
-	// TODO Перенести в конфиг
-	ver                = "0.8"
-	templateDateFormat = "2006-01-02_15-04"
-
-	// TODO Перенести в конфиг
-	server  = "\\\\Kmisdevserv"
-	service = "IBM Domino Server (DDOMINODATA)"
-
-	// TODO Перенести в конфиг
-	pathTemp         = "temp\\"
-	pathData         = "\\\\Kmisdevserv\\dominodata\\"
-	pathBackup       = "\\\\Kmisdevserv\\dominodata\\backup\\"
-	pathKmis         = "\\\\KSERVER\\!Common\\КМИС ОП"
-	pathSigned       = "\\\\KSERVER\\!Common\\КМИС ОП\\Подписанные\\"
-	aliasesFilename  = "aliases"
-	lotusmenFilename = "lotusmen"
-)
+const ()
 
 var (
 	status int8 // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
@@ -108,10 +91,22 @@ var (
 		0, // lastStarted      int64
 	}
 
-	about = "Autot Client " + ver
+	players  = make(map[string]string)
+	aliases  = make(map[string]string)
+	lotusmen = make(map[string]string)
+	config   = make(map[string]string)
 
-	countdown = 6 // количество секунд до остановки службы
-	cooldown  = 500
+	ver                string
+	templateDateFormat string
+	server             string
+	service            string
+	pathSigned         string
+	pathTemp           string
+	pathData           string
+	pathKmis           string
+	pathBackup         string
+
+	about string
 
 	item     *systray.MenuItem
 	files    []string
@@ -141,10 +136,6 @@ var (
 		" _разглядывает пятно на полу..._",
 		" _выглядит гордым..._",
 	}
-
-	players  = make(map[string]string)
-	aliases  = make(map[string]string)
-	lotusmen = make(map[string]string)
 
 	voteEnabled bool
 	voteChan    = make(chan bool)
@@ -214,6 +205,15 @@ func process() {
 func loop() {
 	// TODO первое сообщение должно быть
 	// что-то вроде "на момент запуска бота служба была запущена"
+	cooldownString := config["cooldown"]
+	cooldown, err := strconv.Atoi(cooldownString)
+	if err != nil {
+		log.Println("Не удалось конвертировать ключ cooldown из файла config. " +
+			"Использую значение по умолчанию 500 миллисекунд (" + err.Error() + ")")
+		cooldown = 500
+	}
+	cooldownMillis := time.Duration(cooldown) * time.Millisecond
+
 	for {
 		// TODO replace with switch or something
 		out := execute("query")
@@ -230,13 +230,13 @@ func loop() {
 			status = 3
 			process()
 		}
-		time.Sleep(time.Duration(cooldown) * time.Millisecond)
+		time.Sleep(cooldownMillis)
 	}
 }
 
 func onReady() {
 	systray.SetIcon(iconsArray[2])
-	systray.SetTitle("Autot Server")
+	systray.SetTitle("Autot Server " + ver)
 	systray.SetTooltip("Автотправитель")
 	go func() {
 		systray.AddMenuItem(about, "Автотправитель")
@@ -268,8 +268,19 @@ func main() {
 		// ioutil.WriteFile(fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano()), []byte(now.String()), 0644)
 	}
 
-	loadFile(aliasesFilename, aliases)
-	loadFile(lotusmenFilename, lotusmen)
+	loadFile("config", config)
+	ver = config["ver"]
+	templateDateFormat = config["templateDateFormat"]
+	server = config["server"]
+	service = config["service"]
+	pathSigned = config["pathSigned"]
+	pathTemp = config["pathTemp"]
+	pathData = config["pathData"]
+	pathKmis = config["pathKmis"]
+	pathBackup = config["pathBackup"]
+
+	loadFile("aliases", aliases)
+	loadFile("lotusmen", lotusmen)
 
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
@@ -282,7 +293,7 @@ func main() {
 }
 
 func client(token string) {
-	about = "Autot " + ver
+	about = "Autot Client " + ver
 Reconnect:
 	log.Println("Connecting...")
 	slack, err := hanu.New(token)
@@ -333,6 +344,14 @@ Reconnect:
 		func(conv hanu.ConversationInterface) {
 			startPoll(conv)
 
+			countdownString := config["countdown"]
+			countdown, err := strconv.Atoi(countdownString)
+			if err != nil {
+				log.Println("Не удалось конвертировать ключ countdown из файла config. " +
+					"Использую значение по умолчанию 6 миллисекунд (" + err.Error() + ")")
+				countdown = 6
+			}
+
 			var text string
 			var cancelled bool
 			switch status {
@@ -344,8 +363,7 @@ Reconnect:
 				text = "Проявите терпение, служба уже останавливается!"
 			case 4:
 				// TODO добавить отправку предупреждения в скайп
-				conv.Reply("*ВНИМАНИЕ!*\nСлужба будет остановлена через " +
-					strconv.Itoa(countdown) + " секунд!")
+				conv.Reply("*ВНИМАНИЕ!*\nСлужба будет остановлена через " + countdownString + " с!")
 				for i := countdown; i > 0; i-- {
 					select {
 					case <-opStatus:
