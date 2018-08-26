@@ -22,6 +22,7 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -52,11 +53,13 @@ const (
 	service = "IBM Domino Server (DDOMINODATA)"
 
 	// TODO Перенести в конфиг
-	pathTemp   = "temp\\"
-	pathData   = "\\\\Kmisdevserv\\dominodata\\"
-	pathBackup = "\\\\Kmisdevserv\\dominodata\\backup\\"
-	pathKmis   = "\\\\KSERVER\\!Common\\КМИС ОП"
-	pathSigned = "\\\\KSERVER\\!Common\\КМИС ОП\\Подписанные\\"
+	pathTemp         = "temp\\"
+	pathData         = "\\\\Kmisdevserv\\dominodata\\"
+	pathBackup       = "\\\\Kmisdevserv\\dominodata\\backup\\"
+	pathKmis         = "\\\\KSERVER\\!Common\\КМИС ОП"
+	pathSigned       = "\\\\KSERVER\\!Common\\КМИС ОП\\Подписанные\\"
+	aliasesFilename  = "aliases"
+	lotusmenFilename = "lotusmen"
 )
 
 var (
@@ -138,50 +141,37 @@ var (
 		" _разглядывает пятно на полу..._",
 		" _выглядит гордым..._",
 	}
-	players = make(map[string]string)
+
+	players  = make(map[string]string)
+	aliases  = make(map[string]string)
+	lotusmen = make(map[string]string)
 
 	voteEnabled bool
 	voteChan    = make(chan bool)
 	votes       = 3
 	voters      []string
-
-	// TODO Перенести в отдельный файл
-	aliases = map[string]string{
-		"KMIS_main.ntf":         "Основной шаблон КМИС",
-		"CRDirectory.ntf":       "Центральный справочник",
-		"MKCalendar6.ntf":       "Календарь КМИС",
-		"kmis_globkalendar.ntf": "Общий календарь ЛПУ",
-		"kmis_RSysDir.ntf":      "Региональная НСИ",
-		"kmis_FSysDir.ntf":      "Федеральная НСИ",
-		"SystemIntro.ntf":       "Начальная страница КМИС",
-		"kmis_mes.ntf":          "Справочник медицинских стандартов",
-		"kmis_frmstr.nsf":       "Печатные формы КМИС",
-		"MKCurrent2.ntf":        "Истории болезни",
-		"MKAmbul2.ntf":          "Амбулаторные карты",
-		"MKAmbul2M.ntf":         "Амбулаторные карты (mini)",
-		"MKPasport2.ntf":        "Паспортная часть",
-		"MKPasport2M.ntf":       "Паспортная часть (mini)",
-		"MKArhiv2.ntf":          "Архив документов",
-		"CSTrash.ntf":           "Корзина",
-		"kmisrir_iemk.ntf":      "Интегрированная ЭМК",
-		"kmis_kladr.ntf":        "Классификатор адресов",
-		"kmis_udlo.ntf":         "Региональная система лекарственного обеспечения",
-		"kmis_labserv.ntf":      "Web-сервисы интеграции",
-		"MKAKPasp.ntf":          "Паспорт поликлиники",
-		"kmis_globdir.ntf":      "Глобальный справочник КМИС",
-		"kmis_Autopsy.ntf":      "Журнал патанатомии",
-		"kmis_usl.ntf":          "Услуги для КМИС",
-	}
-
-	// FIXME hardcode
-	lotusmen = map[string]string{
-		"UC7GRMGA2": "Максим Паничев",
-		"UAQAL4NPR": "Алексей Салиенко",
-		"UA63MNKHR": "Павел Боровинский",
-		"UAQC2EAUX": "Андрей Бородулин",
-		"UANLUENDP": "Александр Кирпу",
-	}
 )
+
+func loadFile(fileName string, mapName map[string]string) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	separator := "="
+
+	var line []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line = strings.Split(scanner.Text(), separator)
+		mapName[line[0]] = line[1]
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
 
 func execute(s string) string {
 	o, err := exec.Command("sc", server, s, service).Output()
@@ -277,6 +267,9 @@ func main() {
 		// now := time.Now()
 		// ioutil.WriteFile(fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano()), []byte(now.String()), 0644)
 	}
+
+	loadFile(aliasesFilename, aliases)
+	loadFile(lotusmenFilename, lotusmen)
 
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
@@ -846,7 +839,7 @@ func startRps() {
 	}
 	convList[0].Reply(resultMessage + "\n_Идет подсчет результатов..._")
 
-	for i := 4; i > 0; i-- {
+	for i := 3; i > 0; i-- {
 		time.Sleep(time.Second)
 		randomPlayer := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(playersList))
 		randomAction := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(len(rpsActions))
