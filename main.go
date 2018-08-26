@@ -105,6 +105,8 @@ var (
 	pathData           string
 	pathKmis           string
 	pathBackup         string
+	cooldownString     string
+	countdownString    string
 
 	about string
 
@@ -146,7 +148,8 @@ var (
 func loadFile(fileName string, mapName map[string]string) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Не удалось найти файл \"" + fileName + "\" (" + err.Error() + ")")
+		return
 	}
 	defer file.Close()
 
@@ -160,8 +163,22 @@ func loadFile(fileName string, mapName map[string]string) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
+}
+
+func reloadConfig() {
+	ver = config["ver"]
+	templateDateFormat = config["templateDateFormat"]
+	server = config["server"]
+	service = config["service"]
+	pathSigned = config["pathSigned"]
+	pathTemp = config["pathTemp"]
+	pathData = config["pathData"]
+	pathKmis = config["pathKmis"]
+	pathBackup = config["pathBackup"]
+	cooldownString = config["cooldown"]
+	countdownString = config["countdown"]
 }
 
 func execute(s string) string {
@@ -205,16 +222,15 @@ func process() {
 func loop() {
 	// TODO первое сообщение должно быть
 	// что-то вроде "на момент запуска бота служба была запущена"
-	cooldownString := config["cooldown"]
-	cooldown, err := strconv.Atoi(cooldownString)
-	if err != nil {
-		log.Println("Не удалось конвертировать ключ cooldown из файла config. " +
-			"Использую значение по умолчанию 500 миллисекунд (" + err.Error() + ")")
-		cooldown = 500
-	}
-	cooldownMillis := time.Duration(cooldown) * time.Millisecond
-
 	for {
+		cooldown, err := strconv.Atoi(cooldownString)
+		if err != nil {
+			log.Println("Не удалось конвертировать ключ cooldown из файла config. " +
+				"Использую значение по умолчанию 500 миллисекунд (" + err.Error() + ")")
+			cooldown = 500
+		}
+		cooldownMillis := time.Duration(cooldown) * time.Millisecond
+
 		// TODO replace with switch or something
 		out := execute("query")
 		if strings.Contains(out, statuses[4]) {
@@ -269,18 +285,11 @@ func main() {
 	}
 
 	loadFile("config", config)
-	ver = config["ver"]
-	templateDateFormat = config["templateDateFormat"]
-	server = config["server"]
-	service = config["service"]
-	pathSigned = config["pathSigned"]
-	pathTemp = config["pathTemp"]
-	pathData = config["pathData"]
-	pathKmis = config["pathKmis"]
-	pathBackup = config["pathBackup"]
+	reloadConfig()
 
 	loadFile("aliases", aliases)
 	loadFile("lotusmen", lotusmen)
+	loadFile("lotusmn", lotusmen)
 
 	if len(os.Args) > 1 {
 		arg := os.Args[1]
@@ -344,7 +353,6 @@ Reconnect:
 		func(conv hanu.ConversationInterface) {
 			startPoll(conv)
 
-			countdownString := config["countdown"]
 			countdown, err := strconv.Atoi(countdownString)
 			if err != nil {
 				log.Println("Не удалось конвертировать ключ countdown из файла config. " +
@@ -435,6 +443,56 @@ Reconnect:
 				text += filename + strings.Repeat(" ", spaces) + alias + "\n"
 			}
 			conv.Reply("```" + text + "```")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!config",
+		"показать настройки",
+		func(conv hanu.ConversationInterface) {
+			text := "Текущие настройки:\n"
+			columnWidth := 20
+			for key, value := range config {
+				spaces := columnWidth - len(key)
+				if spaces < 1 {
+					spaces = 1
+				}
+				text += key + strings.Repeat(" ", spaces) + value + "\n"
+			}
+			conv.Reply("```" + text + "```")
+			conv.Reply("Изменить настройки можно командой `!config <key> <value>`")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!config <key> <value>", "изменяет значение ключа `<key>` на `<value>` "+
+		"(после перезагрузки настройки будут считаны из файла `config`)",
+		func(conv hanu.ConversationInterface) {
+			key, err := conv.String("key")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
+			}
+
+			value, err := conv.String("value")
+			if err != nil {
+				conv.Reply("```Ошибка!\n" + err.Error() + "```")
+				return
+			}
+
+			_, ok := config[key]
+			if !ok {
+				conv.Reply("Нет такого ключа")
+				return
+			}
+			config[key] = value
+			reloadConfig()
+			conv.Reply("Значение ключа `" + key + "` изменено на `" + value + "`")
+		})
+	slack.Register(cmd)
+
+	cmd = hanu.NewCommand("!config-load-defaults", "перезагрузить конфиг из файла",
+		func(conv hanu.ConversationInterface) {
+			loadFile("config", config)
+			reloadConfig()
 		})
 	slack.Register(cmd)
 
