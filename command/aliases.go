@@ -7,6 +7,8 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Aliases содержит функцию, которая отображает известные алиасы шаблонов.
+// Эти алиасы содержатся в файле "aliases.list"
 var Aliases = func(conv hanu.ConversationInterface) {
 	text := "Список алиасов шаблонов:\n"
 	columnWidth := 26

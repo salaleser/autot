@@ -3,12 +3,9 @@ package client
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/faiface/beep/speaker"
-	"github.com/faiface/beep/wav"
 	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/loader"
@@ -41,6 +38,7 @@ var (
 	}
 )
 
+// Connect пытается соединиться с сервером слэка
 func Connect(token string) {
 	gui.SetTitle("Autot Server " + util.Ver)
 
@@ -75,25 +73,21 @@ Reconnect:
 	bot.Listen()
 }
 
-// Loop --- Вечный цикл проверки статуса.
-// 2 раза в секунду опрашивает состояние службы утилитой sc.exe, сравнивает ее
+// Loop запускает вечный цикл опроса состояние службы утилитой sc.exe, сравнивает ее
 // вывод с константами и перезаписывает переменную Status
 func Loop() {
-	// TODO первое сообщение должно быть
-	// что-то вроде "на момент запуска бота служба была запущена"
 	for {
-		// TODO replace with switch or something
 		out := util.Execute("query")
-		if strings.Contains(out, statuses[4]) {
+		if strings.Contains(out, statuses[util.StatusRunning]) {
 			util.Status = 4
 			process(util.Status)
-		} else if strings.Contains(out, statuses[1]) {
+		} else if strings.Contains(out, statuses[util.StatusStopped]) {
 			util.Status = 1
 			process(util.Status)
-		} else if strings.Contains(out, statuses[2]) {
+		} else if strings.Contains(out, statuses[util.StatusStartPending]) {
 			util.Status = 2
 			process(util.Status)
-		} else if strings.Contains(out, statuses[3]) {
+		} else if strings.Contains(out, statuses[util.StatusStopPending]) {
 			util.Status = 3
 			process(util.Status)
 		}
@@ -102,31 +96,19 @@ func Loop() {
 	}
 }
 
-func process(status int8) {
-	var n int8
+func process(status int) {
+	var n int
 	if status == 4 {
 		n = 1
 	} else {
 		n = status + 1
 	}
 	if timeLog[n] >= timeLog[status] {
-		beep(util.Sounds[status])
+		util.Beep(util.Sounds[status])
 		timeLog[status] = time.Now().Unix()
 		gui.Change(status)
 		if util.Conv != nil {
 			util.Conv.Reply(alerts[status])
 		}
 	}
-}
-
-func beep(filename string) {
-	f, err := os.Open("sounds\\" + filename)
-	if err != nil {
-		log.Printf("Не удалось найти звуковой файл (%s)", err)
-		return
-	}
-
-	s, format, _ := wav.Decode(f)
-	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-	speaker.Play(s)
 }

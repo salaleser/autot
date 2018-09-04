@@ -11,15 +11,17 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Push содержит функцию, которая распакует архив с подписанными шаблонами из папки path-signed и
+// копирует с заменой файлы в папку path-data
 var Push = func(conv hanu.ConversationInterface) {
-	for {
+	if true { // DEBUG
 		conv.Reply("Команда нестабильная, поэтому пока отключена." +
 			"Если вы хотели отправить шаблоны в КМИС ОП, то используйте команду `!pull`" +
 			" (Андрей считает, что поменять местами пуш и пул будет логичнее)")
 		return
 	}
 
-	if util.Status != 1 {
+	if util.Status != util.StatusStopped {
 		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
 		return
 	}
@@ -87,14 +89,4 @@ var Push = func(conv hanu.ConversationInterface) {
 	os.Remove(util.PathSigned + signed.Name())
 
 	conv.Reply("_Установка подписанных шаблонов завершена успешно_")
-}
-
-var PushNthFile = func(conv hanu.ConversationInterface) {
-	if util.Status != 1 {
-		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
-		return
-	}
-
-	conv.Reply("Ничего не сделано, команда в разработке. "+
-		"Временное решение: оставьте один архив в папке %s", util.PathSigned)
 }

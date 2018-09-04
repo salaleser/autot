@@ -1,11 +1,8 @@
 package gui
 
 import (
-	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
-	"time"
 
 	"github.com/getlantern/systray"
 	"salaleser.ru/autot/icon"
@@ -42,17 +39,20 @@ var (
 	}
 )
 
+// SetTitle устанавливает заголовок в верхнем пункте контекстного меню бота в системном трее винды
 func SetTitle(_title string) {
 	title = _title
 }
 
-func Change(status int8) {
+// Change обновляет контекстное меню
+func Change(status int) {
 	log.Println(tooltips[status])
 	item.SetTitle(titles[status])
 	systray.SetIcon(iconsArray[status])
 	systray.SetTooltip(tooltips[status])
 }
 
+// OnReady запускает иконку в системном трее
 func OnReady() {
 	systray.SetIcon(iconsArray[2])
 	systray.AddMenuItem(title, "Автотправитель")
@@ -64,9 +64,9 @@ func OnReady() {
 	for {
 		select {
 		case <-item.ClickedCh:
-			if util.Status == 4 {
+			if util.Status == util.StatusRunning {
 				go util.Execute("stop")
-			} else if util.Status == 1 {
+			} else if util.Status == util.StatusStopped {
 				go util.Execute("start")
 			}
 		case <-mQuit.ClickedCh:
@@ -76,9 +76,10 @@ func OnReady() {
 	}
 }
 
+// OnExit пока ничего не делает
 func OnExit() {
-	now := time.Now()
-	filename := fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano())
-	data := []byte(now.String())
-	ioutil.WriteFile(filename, data, 0644)
+	// now := time.Now()
+	// filename := fmt.Sprintf(`on_exit_%d.txt`, now.UnixNano())
+	// data := []byte(now.String())
+	// ioutil.WriteFile(filename, data, 0644)
 }

@@ -5,6 +5,7 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Rm удалит элемент из списка отправляемых файлов по его номеру (ключу в мапе)
 var Rm = func(conv hanu.ConversationInterface) {
 	key, err := conv.String("номер")
 	if err != nil {

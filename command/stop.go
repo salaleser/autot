@@ -7,33 +7,34 @@ import (
 	"salaleser.ru/autot/util"
 )
 
-// Stop stops the service
+// Stop сореджит функцию, которая остановит службу
 var Stop = func(conv hanu.ConversationInterface) {
 	util.Conv = conv
-
-	var text string
 	switch util.Status {
-	case 1:
-		text = "Служба уже остановлена!"
-	case 2:
-		text = "Подождите, служба еще не запущена!"
-	case 3:
-		text = "Проявите терпение, служба уже останавливается!"
-	case 4:
-		countdown := util.Countdown
+	case util.StatusStopped:
+		conv.Reply("Служба уже остановлена!")
+	case util.StatusStartPending:
+		conv.Reply("Подождите, служба еще не запущена!")
+	case util.StatusStopPending:
+		conv.Reply("Проявите терпение, служба уже останавливается!")
+	case util.StatusRunning:
+		cd := util.Countdown
 		util.OpStatus = make(chan bool)
-		conv.Reply("*ВНИМАНИЕ!*\nСлужба будет остановлена через %d с!\n(`-` — отмена)", countdown)
-		for i := countdown; i > 0; i-- {
+		util.Beep(util.Sounds[5])
+		conv.Reply("*ВНИМАНИЕ!*\nСлужба будет остановлена через %d секунд!\n(`-` — отмена)", cd)
+		for i := cd; i > 0; i-- {
 			select {
 			case <-util.OpStatus:
 				conv.Reply("```Остановка службы отменена```")
 				return
 			default:
 				time.Sleep(time.Second)
+				if i%3 == 0 {
+					util.Beep(util.Sounds[6])
+				}
 			}
 		}
-		go util.Execute("stop")
-		text = "Останавливаю…"
+		conv.Reply("Останавливаю…")
+		util.Execute("stop")
 	}
-	conv.Reply(text)
 }

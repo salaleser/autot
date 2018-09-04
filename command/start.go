@@ -5,17 +5,18 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Start содержит функцию, которая запустит службу
 var Start = func(conv hanu.ConversationInterface) {
 	var text string
 	switch util.Status {
-	case 1:
+	case util.StatusStopped:
 		go util.Execute("start")
 		text = "Запускаю…"
-	case 2:
+	case util.StatusStartPending:
 		text = "Терпение, служба уже запускается!"
-	case 3:
+	case util.StatusStopPending:
 		text = "Подождите, служба еще не остановлена!"
-	case 4:
+	case util.StatusRunning:
 		text = "Служба уже запущена!"
 	}
 	conv.Reply(text)

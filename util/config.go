@@ -11,72 +11,102 @@ import (
 	"strings"
 	"time"
 
+	"github.com/faiface/beep/speaker"
+	"github.com/faiface/beep/wav"
 	"github.com/sbstjn/hanu"
 )
 
 const (
-	//Ver - номер версии
+	//Ver содержит номер версии
 	Ver = "0.9"
 
-	//TemplateDateFormat - формат даты для архива
+	//TemplateDateFormat содержит формат даты для архива
 	TemplateDateFormat = "2006-01-02_15-04"
 
-	//FilenameConfig - имя конфигурационного файла
+	//FilenameConfig содержит имя конфигурационного файла
 	FilenameConfig = "autot.cfg"
 
-	//FilenameFileList - имя файла с перечнем отправляемых шаблонов
+	//FilenameFileList содержит имя файла с перечнем отправляемых шаблонов
 	FilenameFileList = "files.bak"
 
-	//FilenameUserList - имя файла с перечнем пользователей
+	//FilenameUserList содержит имя файла с перечнем пользователей
 	FilenameUserList = "users.list"
 
-	//FilenameAliasList - имя файла с перечнем алиасов шаблонов
+	//FilenameAliasList содержит имя файла с перечнем алиасов шаблонов
 	FilenameAliasList = "aliases.list"
 )
 
-var (
-	//Status - код состояния службы
-	Status int8 // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+// Статусы службы
+const (
+	StatusStopped      = 1
+	StatusStartPending = 2
+	StatusStopPending  = 3
+	StatusRunning      = 4
+)
 
-	//Sounds - массив со звуковыми файлами
+var (
+	//Status содержит код состояния службы
+	Status int // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+
+	//Sounds содержит массив со звуковыми файлами
 	Sounds = []string{
 		"Archspire — Involuntary Doppelgänger.mp3", // этот элемент никогда не используется, а зря
 		"", // stopped-sound
 		"", // start-pending-sound
 		"", // stop-pending-sound
 		"", // started-sound
+		"", // stop-vote-sound
+		"", // beep-sound
 	}
 
-	//Files - список отправляемых файлов
+	//Files содержит список отправляемых файлов
 	Files = make(map[string]string)
 
-	//Players - список игроков в КНБ
+	//Players содержит список игроков в КНБ
 	Players = make(map[string]string)
 
-	//Aliases - список алиасов шаблонов
+	//Aliases содержит список алиасов шаблонов
 	Aliases = make(map[string]string)
 
-	//Users - список пользователей
+	//Users содержит список пользователей
 	Users = make(map[string]string)
 
-	//Config - список ключей и значений настроек
+	//Config содержит список ключей и значений настроек
 	Config = make(map[string]string)
 
-	separator  = "="
-	name       = "sc"
-	server     string
-	Service    string
-	PathSigned string
-	PathTemp   string
-	PathData   string
-	PathKmis   string
-	PathBackup string
-	Cooldown   int
-	Countdown  int
+	separator = "="
+	name      = "sc"
+	server    string
 
+	// Service содержит имя службы
+	Service string
+
+	// PathSigned содержит путь к папке с подписанными шаблонами
+	PathSigned string
+
+	// PathTemp содержит путь к временной папке
+	PathTemp string
+
+	// PathData содержит путь к папке с шаблонами
+	PathData string
+
+	// PathKmis содержит путь к папке, в которой содержатся шаблоны для отправки
+	PathKmis string
+
+	// PathBackup содержит путь к папке, в которой содержатся резервные копии шаблонов
+	PathBackup string
+
+	// Cooldown содержит время в миллисекундах между запросами о состоянии службыы
+	Cooldown int
+
+	// Countdown содержит время в секундах с момента запроса на остановку службы до ее остановки
+	Countdown int
+
+	// Conv содержит ссылку на канал, в который необходимо сообщать об изменениях состояния службы
 	Conv hanu.ConversationInterface
 
-	OpStatus chan bool // канал для отмены остановки
+	// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
+	OpStatus chan bool
 
 	errors = map[int]string{
 		5:    "Отказано в доступе.",
@@ -90,6 +120,7 @@ var (
 	}
 )
 
+// Execute выполняет команду name с аргументами
 func Execute(s string) string {
 	o, err := exec.Command(name, server, s, Service).Output()
 	if err != nil {
@@ -98,6 +129,7 @@ func Execute(s string) string {
 	return string(o)
 }
 
+// ReadFileIntoMap считывает файл в мэп
 func ReadFileIntoMap(filename string, _map map[string]string) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -122,19 +154,34 @@ func ReadFileIntoMap(filename string, _map map[string]string) {
 	}
 }
 
-//RandomNumber - возвращает случайное число от нуля до max
+//RandomNumber возвращает случайное число от нуля до max
 func RandomNumber(max int) int {
 	seed := time.Now().UnixNano()
 	source := rand.NewSource(seed)
 	return rand.New(source).Intn(max)
 }
 
+// Beep воспроизводит звук
+func Beep(filename string) {
+	f, err := os.Open("sounds\\" + filename)
+	if err != nil {
+		log.Printf("Не удалось найти звуковой файл (%s)", err)
+		return
+	}
+
+	s, format, _ := wav.Decode(f)
+	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	speaker.Play(s)
+}
+
+// DeleteFileList удаляет файл-бэкап списка отправляемых файлов
 func DeleteFileList() {
 	if err := os.Remove(FilenameFileList); err != nil {
 		log.Printf("Ошибка при попытке удаления файла %s (%s)", FilenameFileList, err)
 	}
 }
 
+// SaveFileList обновляет файл-бэкап списком отправляемых файлов
 func SaveFileList() {
 	var data string
 	for number, filename := range Files {
@@ -177,6 +224,7 @@ func copy(source string, destination string) error {
 	return nil
 }
 
+// ReloadConfig перечитывет конфигурационный файл
 func ReloadConfig() {
 	var ok bool
 	var err error
@@ -246,21 +294,37 @@ func ReloadConfig() {
 		log.Printf(errorMessage, key, Sounds[4])
 	}
 
+	key = "stop-poll-sound"
+	if Sounds[5], ok = Config[key]; !ok {
+		Sounds[5] = "stop-poll.wav"
+		log.Printf(errorMessage, key, Sounds[5])
+	}
+
+	key = "beep-sound"
+	if Sounds[6], ok = Config[key]; !ok {
+		Sounds[6] = "beep.wav"
+		log.Printf(errorMessage, key, Sounds[6])
+	}
+
+	var defaultValue int
+
 	key = "cooldown"
+	defaultValue = 666
 	if _, ok = Config[key]; !ok {
-		Cooldown = 500
+		Cooldown = defaultValue
 		log.Printf(errorMessageWithDigit, key, Cooldown)
 	} else if Cooldown, err = strconv.Atoi(Config[key]); err != nil {
-		Cooldown = 500
+		Cooldown = defaultValue
 		log.Printf(convertionErrorMessage, key, Cooldown, err)
 	}
 
 	key = "countdown"
+	defaultValue = 13
 	if _, ok = Config[key]; !ok {
-		Countdown = 10
+		Countdown = defaultValue
 		log.Printf(errorMessageWithDigit, key, Countdown)
 	} else if Countdown, err = strconv.Atoi(Config[key]); err != nil {
-		Countdown = 12
+		Countdown = defaultValue
 		log.Printf(convertionErrorMessage, key, Countdown, err)
 	}
 }

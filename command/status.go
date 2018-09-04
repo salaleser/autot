@@ -5,6 +5,7 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Status содержит функцию, которая отобразит список отправляемых файлов
 var Status = func(conv hanu.ConversationInterface) {
 	var text string
 

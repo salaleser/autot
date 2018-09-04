@@ -5,6 +5,7 @@ import (
 	"salaleser.ru/autot/command"
 )
 
+// LoadCommands загружает модули (подключает к библиотеке hanu команды)
 func LoadCommands() []hanu.Command {
 	var name string
 	var description string
@@ -91,11 +92,6 @@ func LoadCommands() []hanu.Command {
 		"папки *dominodata* в папку *dominodata\\backup* и распакует с заменой файлы из архива в " +
 		"папку *dominodata* (работает нестабильно, лучше вручную пока ставить)"
 	function = command.Push
-	commands = append(commands, hanu.NewCommand(name, description, function))
-
-	name = "!push <номер>"
-	description = "ставит шаблоны из номера архива, указанного в аргументе"
-	function = command.PushNthFile
 	commands = append(commands, hanu.NewCommand(name, description, function))
 
 	name = "!user"

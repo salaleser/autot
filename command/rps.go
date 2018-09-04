@@ -35,16 +35,19 @@ var (
 	}
 )
 
+// Rock содержит функцию, которая запустит игру "Камень, ножницы, бумага" с выбором камня
 var Rock = func(conv hanu.ConversationInterface) {
 	user := conv.Message().User()
 	playRps(user, rpsRock)
 }
 
+// Paper содержит функцию, которая запустит игру "Камень, ножницы, бумага" с выбором бумаги
 var Paper = func(conv hanu.ConversationInterface) {
 	user := conv.Message().User()
 	playRps(user, rpsPaper)
 }
 
+// Scissors содержит функцию, которая запустит игру "Камень, ножницы, бумага" с выбором ножниц
 var Scissors = func(conv hanu.ConversationInterface) {
 	user := conv.Message().User()
 	playRps(user, rpsScissors)

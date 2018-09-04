@@ -10,15 +10,17 @@ import (
 	"salaleser.ru/autot/util"
 )
 
-//Pull упакует файлы и отправит в папку path-kmis
+//Pull содерижт функцию, которая упакует файлы и отправит в папку path-kmis
 var Pull = func(conv hanu.ConversationInterface) {
-	if util.Status != 1 {
-		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
+	if util.Status != util.StatusStopped {
+		errMsg := "Нельзя изменять шаблоны пока служба не остановлена"
+		conv.Reply("```%s```", errMsg)
 		return
 	}
 
 	if len(util.Files) == 0 {
-		conv.Reply("```Список пустой!```\n`!add <файл(-ы),через,запятую>` — добавить файл(-ы)")
+		errMsg := "Список пустой!"
+		conv.Reply("```%s```\n`!add <файл(-ы),через,запятую>` — добавить файл(-ы)", errMsg)
 		return
 	}
 
@@ -38,20 +40,23 @@ var Pull = func(conv hanu.ConversationInterface) {
 	for _, filename := range util.Files {
 		file, err := os.Open(util.PathData + filename)
 		if err != nil {
-			conv.Reply("```Ошибка при попытке архивировать шаблоны!\n%s```", err)
+			errMsg := "Ошибка при попытке архивировать шаблоны!"
+			conv.Reply("```%s\n%s```", errMsg, err)
 			return
 		}
 		defer file.Close()
 
 		info, err := file.Stat()
 		if err != nil {
-			conv.Reply("```Ошибка при попытке архивировать шаблоны!\n%s```", err)
+			errMsg := "Ошибка при попытке архивировать шаблоны!"
+			conv.Reply("```%s\n%s```", errMsg, err)
 			return
 		}
 
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
-			conv.Reply("```Ошибка при попытке архивировать шаблоны!\n%s```", err)
+			errMsg := "Ошибка при попытке архивировать шаблоны!"
+			conv.Reply("```%s\n%s```", errMsg, err)
 			return
 		}
 
@@ -59,13 +64,15 @@ var Pull = func(conv hanu.ConversationInterface) {
 
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
-			conv.Reply("```Ошибка при попытке архивировать шаблоны!\n%s```", err)
+			errMsg := "Ошибка при попытке архивировать шаблоны!"
+			conv.Reply("```%s\n%s```", errMsg, err)
 			return
 		}
 
 		_, err = io.Copy(writer, file)
 		if err != nil {
-			conv.Reply("```Ошибка при попытке архивировать шаблоны!\n%s```", err)
+			errMsg := "Ошибка при попытке архивировать шаблоны!"
+			conv.Reply("```%s\n%s```", errMsg, err)
 			return
 		}
 	}

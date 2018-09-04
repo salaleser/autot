@@ -5,6 +5,7 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Hook содержит функцию, которая сохранит ссылку текущего канала в глобальную переменную
 var Hook = func(conv hanu.ConversationInterface) {
 	util.Conv = conv
 	conv.Reply("*deprecated*\n`!hook` можно больше не использовать," +

@@ -10,6 +10,7 @@ import (
 	"salaleser.ru/autot/util"
 )
 
+// Add содержит функцию, которая добавляет указанные шаблоны в список отправляемых файлов
 var Add = func(conv hanu.ConversationInterface) {
 	s, err := conv.String("файлы,через,запятую,без,пробелов")
 	if err != nil {
