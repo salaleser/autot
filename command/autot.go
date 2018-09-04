@@ -7,10 +7,10 @@ import (
 	"salaleser.ru/autot/util"
 )
 
-// Autot содержит функцию, которая поочередно запустит команды на остановку службы, копирования и
-// упаковку шаблонов из списка отправляемых в специальную папку и запуска службы
+// Autot сореджит функцию, которая остановит службу, запакует и скопирует шаблоны и запустит службу
 var Autot = func(conv hanu.ConversationInterface) {
 	Stop(conv)
+	time.Sleep(time.Second)
 	var count int
 	for util.Status != util.StatusStopped {
 		time.Sleep(time.Second)
