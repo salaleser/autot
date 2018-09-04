@@ -79,16 +79,16 @@ func Loop() {
 	for {
 		out := util.Execute("query")
 		if strings.Contains(out, statuses[util.StatusRunning]) {
-			util.Status = 4
+			util.Status = util.StatusRunning
 			process(util.Status)
 		} else if strings.Contains(out, statuses[util.StatusStopped]) {
-			util.Status = 1
+			util.Status = util.StatusStopped
 			process(util.Status)
 		} else if strings.Contains(out, statuses[util.StatusStartPending]) {
-			util.Status = 2
+			util.Status = util.StatusStartPending
 			process(util.Status)
 		} else if strings.Contains(out, statuses[util.StatusStopPending]) {
-			util.Status = 3
+			util.Status = util.StatusStopPending
 			process(util.Status)
 		}
 		cooldownMillis := time.Duration(util.Cooldown) * time.Millisecond
@@ -98,7 +98,7 @@ func Loop() {
 
 func process(status int) {
 	var n int
-	if status == 4 {
+	if status == util.StatusRunning {
 		n = 1
 	} else {
 		n = status + 1
