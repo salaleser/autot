@@ -27,7 +27,7 @@ var Pull = func(conv hanu.ConversationInterface) {
 	time := time.Now()
 	date := time.Format(util.TemplateDateFormat)
 	arcName := "Templates_" + date + "_KMIS.zip"
-	arcFullName := util.PathKmis + "\\" + arcName
+	arcFullName := util.SrcDir + "\\" + arcName
 	archiveFile, err := os.Create(arcFullName)
 	if err != nil {
 		conv.Reply("```Ошибка при попытке создать архив!\n%s```", err)
@@ -38,7 +38,7 @@ var Pull = func(conv hanu.ConversationInterface) {
 	defer zipWriter.Close()
 
 	for _, filename := range util.Files {
-		file, err := os.Open(util.PathData + filename)
+		file, err := os.Open(util.DataDir + filename)
 		if err != nil {
 			errMsg := "Ошибка при попытке архивировать шаблоны!"
 			conv.Reply("```%s\n%s```", errMsg, err)

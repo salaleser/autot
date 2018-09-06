@@ -16,37 +16,49 @@ import (
 	"github.com/sbstjn/hanu"
 )
 
+// Ver содержит номер версии
+const Ver = "0.9.1"
+
+// TemplateDateFormat содержит формат даты для архива
+const TemplateDateFormat = "2006-01-02_15-04"
+
+// Имена файлов
 const (
-	//Ver содержит номер версии
-	Ver = "0.9"
-
-	//TemplateDateFormat содержит формат даты для архива
-	TemplateDateFormat = "2006-01-02_15-04"
-
-	//FilenameConfig содержит имя конфигурационного файла
-	FilenameConfig = "autot.cfg"
-
-	//FilenameFileList содержит имя файла с перечнем отправляемых шаблонов
-	FilenameFileList = "files.bak"
-
-	//FilenameUserList содержит имя файла с перечнем пользователей
-	FilenameUserList = "users.list"
-
-	//FilenameAliasList содержит имя файла с перечнем алиасов шаблонов
-	FilenameAliasList = "aliases.list"
+	FilenameConfig    = "autot.cfg"    // имя конфигурационного файла
+	FilenameFileList  = "files.bak"    // имя файла с перечнем отправляемых шаблонов
+	FilenameUserList  = "users.list"   // имя файла с перечнем пользователей
+	FilenameAliasList = "aliases.list" // имя файла с перечнем алиасов шаблонов
 )
 
 // Статусы службы
 const (
-	StatusStopped      = 1
-	StatusStartPending = 2
-	StatusStopPending  = 3
-	StatusRunning      = 4
+	StatusStopped      = 1 // STOPPED
+	StatusStartPending = 2 // START_PENDING
+	StatusStopPending  = 3 // STOP_PENDING
+	StatusRunning      = 4 // RUNNING
+)
+
+// Списки
+var (
+	Files   = make(map[string]string) // список отправляемых файлов
+	Players = make(map[string]string) // список игроков в КНБ
+	Aliases = make(map[string]string) // список алиасов шаблонов
+	Users   = make(map[string]string) // список пользователей
+	Config  = make(map[string]string) // список ключей и значений настроек
 )
 
 var (
-	//Status содержит код состояния службы
+	separator = "="  // разделитель для парсинга файлов
+	name      = "sc" // имя утилиты для запросов
+
+	// Status содержит код состояния службы
 	Status int // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+
+	// Conv содержит ссылку на сообщение для оповещения
+	Conv hanu.ConversationInterface
+
+	// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
+	OpStatus chan bool
 
 	//Sounds содержит массив со звуковыми файлами
 	Sounds = []string{
@@ -59,55 +71,6 @@ var (
 		"", // beep-sound
 	}
 
-	//Files содержит список отправляемых файлов
-	Files = make(map[string]string)
-
-	//Players содержит список игроков в КНБ
-	Players = make(map[string]string)
-
-	//Aliases содержит список алиасов шаблонов
-	Aliases = make(map[string]string)
-
-	//Users содержит список пользователей
-	Users = make(map[string]string)
-
-	//Config содержит список ключей и значений настроек
-	Config = make(map[string]string)
-
-	separator = "="
-	name      = "sc"
-	server    string
-
-	// Service содержит имя службы
-	Service string
-
-	// PathSigned содержит путь к папке с подписанными шаблонами
-	PathSigned string
-
-	// PathTemp содержит путь к временной папке
-	PathTemp string
-
-	// PathData содержит путь к папке с шаблонами
-	PathData string
-
-	// PathKmis содержит путь к папке, в которой содержатся шаблоны для отправки
-	PathKmis string
-
-	// PathBackup содержит путь к папке, в которой содержатся резервные копии шаблонов
-	PathBackup string
-
-	// Cooldown содержит время в миллисекундах между запросами о состоянии службыы
-	Cooldown int
-
-	// Countdown содержит время в секундах с момента запроса на остановку службы до ее остановки
-	Countdown int
-
-	// Conv содержит ссылку на канал, в который необходимо сообщать об изменениях состояния службы
-	Conv hanu.ConversationInterface
-
-	// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
-	OpStatus chan bool
-
 	errors = map[int]string{
 		5:    "Отказано в доступе.",
 		50:   "Такой запрос не поддерживается.",
@@ -118,6 +81,17 @@ var (
 		1639: "?",
 		1722: "Сервер RPC недоступен.",
 	}
+)
+
+// Переменные из конфигурационного файла
+var (
+	server    string // полное имя сервера
+	Service   string // имя службы
+	DestDir   string // путь к папке с подписанными шаблонами
+	DataDir   string // путь к папке с шаблонами
+	SrcDir    string // путь к папке, в которой содержатся шаблоны для отправки
+	Cooldown  int    // время в миллисекундах между запросами о состоянии службы
+	Countdown int    // время в секундах с момента запроса на остановку службы до ее остановки
 )
 
 // Execute выполняет команду name с аргументами
@@ -177,7 +151,7 @@ func Beep(filename string) {
 // DeleteFileList удаляет файл-бэкап списка отправляемых файлов
 func DeleteFileList() {
 	if err := os.Remove(FilenameFileList); err != nil {
-		log.Printf("Ошибка при попытке удаления файла %s (%s)", FilenameFileList, err)
+		log.Printf("Ошибка при попытке удаления файла бэкапа (%s)", err)
 	}
 }
 
@@ -202,8 +176,8 @@ func writeToFile(filename string, flag int, data string) {
 	}
 }
 
-// not used now, just example
-func copy(source string, destination string) error {
+// CopyFile копирует файл
+func CopyFile(source string, destination string) error {
 	src, err := os.Open(source)
 	if err != nil {
 		return err
@@ -229,9 +203,9 @@ func ReloadConfig() {
 	var ok bool
 	var err error
 	var key string
-	errorMessage := "Не найден ключ %q в конфигурационном файле. Использую %q"
-	errorMessageWithDigit := "Не найден ключ %q в конфигурационном файле. Использую \"%d\""
-	convertionErrorMessage := "Неверное значение ключа %q. Использую \"%d\" (%s)"
+	const errorMessage = "Не найден ключ %q в конфигурационном файле. Использую %q"
+	const errorMessageWithDigit = "Не найден ключ %q в конфигурационном файле. Использую \"%d\""
+	const convertionErrorMessage = "Неверное значение ключа %q. Использую \"%d\" (%s)"
 
 	key = "server"
 	if server, ok = Config[key]; !ok {
@@ -245,29 +219,19 @@ func ReloadConfig() {
 		log.Printf(errorMessage, key, Service)
 	}
 
-	key = "path-signed"
-	if PathSigned, ok = Config[key]; !ok {
-		log.Printf(errorMessage, key, PathSigned)
+	key = "dest-dir"
+	if DestDir, ok = Config[key]; !ok {
+		log.Printf(errorMessage, key, DestDir)
 	}
 
-	key = "path-temp"
-	if PathTemp, ok = Config[key]; !ok {
-		log.Printf(errorMessage, key, PathTemp)
+	key = "data-dir"
+	if DataDir, ok = Config[key]; !ok {
+		log.Printf(errorMessage, key, DataDir)
 	}
 
-	key = "path-data"
-	if PathData, ok = Config[key]; !ok {
-		log.Printf(errorMessage, key, PathData)
-	}
-
-	key = "path-kmis"
-	if PathKmis, ok = Config[key]; !ok {
-		log.Printf(errorMessage, key, PathKmis)
-	}
-
-	key = "path-backup"
-	if PathBackup, ok = Config[key]; !ok {
-		log.Printf(errorMessage, key, PathBackup)
+	key = "src-dir"
+	if SrcDir, ok = Config[key]; !ok {
+		log.Printf(errorMessage, key, SrcDir)
 	}
 
 	key = "stopped-sound"

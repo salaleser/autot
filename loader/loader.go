@@ -94,26 +94,6 @@ func LoadCommands() []hanu.Command {
 	function = command.Push
 	commands = append(commands, hanu.NewCommand(name, description, function))
 
-	name = "!user"
-	description = "узнать свой Slack ID (никогда не знаешь что может пригодиться)"
-	function = command.User
-	commands = append(commands, hanu.NewCommand(name, description, function))
-
-	name = "!r"
-	description = "камень"
-	function = command.Rock
-	commands = append(commands, hanu.NewCommand(name, description, function))
-
-	name = "!p"
-	description = "бумага"
-	function = command.Paper
-	commands = append(commands, hanu.NewCommand(name, description, function))
-
-	name = "!s"
-	description = "ножницы"
-	function = command.Scissors
-	commands = append(commands, hanu.NewCommand(name, description, function))
-
 	name = "\\-"
 	description = "отменить запланированную остановку службы (правильно не `\\-`, а `-`)"
 	function = command.VoteNegative

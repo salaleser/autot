@@ -80,17 +80,14 @@ func Loop() {
 		out := util.Execute("query")
 		if strings.Contains(out, statuses[util.StatusRunning]) {
 			util.Status = util.StatusRunning
-			process(util.Status)
 		} else if strings.Contains(out, statuses[util.StatusStopped]) {
 			util.Status = util.StatusStopped
-			process(util.Status)
 		} else if strings.Contains(out, statuses[util.StatusStartPending]) {
 			util.Status = util.StatusStartPending
-			process(util.Status)
 		} else if strings.Contains(out, statuses[util.StatusStopPending]) {
 			util.Status = util.StatusStopPending
-			process(util.Status)
 		}
+		process(util.Status)
 		cooldownMillis := time.Duration(util.Cooldown) * time.Millisecond
 		time.Sleep(cooldownMillis)
 	}

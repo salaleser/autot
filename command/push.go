@@ -3,90 +3,65 @@ package command
 import (
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"strconv"
+	"regexp"
 
 	unarr "github.com/gen2brain/go-unarr"
 	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/util"
 )
 
-// Push содержит функцию, которая распакует архив с подписанными шаблонами из папки path-signed и
-// копирует с заменой файлы в папку path-data
+// Push содержит функцию, которая распакует архив с подписанными шаблонами из папки и dest-dir
+// копирует с заменой файлы в папку data-dir
 var Push = func(conv hanu.ConversationInterface) {
-	if true { // DEBUG
-		conv.Reply("Команда нестабильная, поэтому пока отключена." +
-			"Если вы хотели отправить шаблоны в КМИС ОП, то используйте команду `!pull`" +
-			" (Андрей считает, что поменять местами пуш и пул будет логичнее)")
-		return
-	}
-
 	if util.Status != util.StatusStopped {
 		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
-		return
+		// return // DEBUG
 	}
 
-	signedArchives, err := ioutil.ReadDir(util.PathSigned)
+	DestDirFiles, err := ioutil.ReadDir(util.DestDir)
 	if err != nil {
-		conv.Reply("```Ошибка при попытке прочитать файлы из папки %s!\n```", util.PathSigned, err)
-		return
-	}
-	if len(signedArchives) == 0 {
-		conv.Reply("```В папке %s нет файлов```", util.PathSigned)
+		conv.Reply("```Ошибка при попытке прочитать файлы из папки \"%s\"\n```", util.DestDir, err)
 		return
 	}
 
-	var signed os.FileInfo
-	if len(signedArchives) == 1 {
-		signed = signedArchives[0]
-		conv.Reply("выбран файл `%s%s`", util.PathSigned, signed.Name())
-	} else {
-		text := "Список подписанных архивов:\n"
-		for i := 1; i <= len(signedArchives); i++ {
-			n := strconv.FormatInt(int64(i), 10)
-			text += n + ". " + signedArchives[i-1].Name() + "\n"
-		}
-		conv.Reply("```%s```", text)
-		// TODO распаковать и поставить шаблоны
-		conv.Reply("(`!pull <номер>` — распаковать и поставить шаблоны (в разработке))")
+	if len(DestDirFiles) == 0 {
+		conv.Reply("```В папке \"%s\" нет файлов```", util.DestDir)
+		return
 	}
 
-	signedDir := util.PathSigned + signed.Name()
-	_, err = exec.Command("xcopy", signedDir, util.PathTemp, "/Y").Output()
+	if len(DestDirFiles) > 1 {
+		conv.Reply("```В папке \"%s\" несколько файлов, не могу выбрать```", util.DestDir)
+		return
+	}
+
+	archivePattern, err := regexp.Compile("^.+\\.7z$")
 	if err != nil {
-		conv.Reply("```Ошибка при копировании архива во временную папку!\n%s```", err)
+		conv.Reply("```Ошибка\n%s```", err)
 		return
 	}
 
-	arcFilename := util.PathTemp + signed.Name()
-	a, err := unarr.NewArchive(arcFilename)
+	signed := DestDirFiles[0]
+
+	if !archivePattern.MatchString(signed.Name()) {
+		conv.Reply("```Файл %q не является архивом```", signed.Name())
+		return
+	}
+
+	tempFile := os.Getenv("TEMP") + "\\" + signed.Name()
+	util.CopyFile(util.DestDir+signed.Name(), tempFile)
+
+	archive, err := unarr.NewArchive(tempFile)
 	if err != nil {
-		conv.Reply("```Ошибка инициализации архива `%s`!\n%s```", arcFilename, err)
+		conv.Reply("```Ошибка инициализации архива \"%s\"\n%s```", tempFile, err)
 		return
 	}
-	defer a.Close()
+	defer os.Remove(tempFile)
+	defer archive.Close()
 
-	signedFilenames, err := a.List()
-	if err != nil {
-		conv.Reply("```Ошибка при чтении имен файлов архива!\n%s```", err)
+	if err = archive.Extract(util.DataDir); err != nil {
+		conv.Reply("```Ошибка при попытке распаковки архива\n%s```", err)
 		return
 	}
-	for _, n := range signedFilenames {
-		_, err := exec.Command("xcopy", util.PathData+n, util.PathBackup, "/Y").Output()
-		if err != nil {
-			conv.Reply("```Ошибка при попытке резервного копирования файла %s!\n%s```", n, err)
-			return
-		}
-		os.Remove(util.PathData + n)
-	}
-
-	err = a.Extract(util.PathData)
-	if err != nil {
-		conv.Reply("```Ошибка при попытке распаковки архива!\n%s```", err)
-		return
-	}
-
-	os.Remove(util.PathSigned + signed.Name())
 
 	conv.Reply("_Установка подписанных шаблонов завершена успешно_")
 }

@@ -18,7 +18,10 @@ var Config = func(conv hanu.ConversationInterface) {
 		}
 		text += key + strings.Repeat(" ", spaces) + value + "\n"
 	}
-	conv.Reply("```%s```\nИзменить настройки можно командой `!config <key> <value>`", text)
+	const configReplaceCommandName = "`!config <key> <value>`"
+	const configReloadCommandName = "`!config reload`"
+	conv.Reply("```%s```\n(%s — изменить настройки, %s — загрузить настройки из файла",
+		text, configReplaceCommandName, configReloadCommandName)
 }
 
 // ConfigReplaceValue содержит функцию, которая заменит значение указанного ключа в памяти программы

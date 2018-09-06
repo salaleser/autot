@@ -20,9 +20,9 @@ var Add = func(conv hanu.ConversationInterface) {
 
 	newFilenames := strings.Split(s, ",")
 
-	allTemplates, err := ioutil.ReadDir(util.PathData)
+	allTemplates, err := ioutil.ReadDir(util.DataDir)
 	if err != nil {
-		conv.Reply("```Ошибка при попытке прочитать файлы из папки %s!\n%s```", util.PathData, err)
+		conv.Reply("```Ошибка при попытке прочитать файлы из папки %s!\n%s```", util.DataDir, err)
 		return
 	}
 
@@ -96,5 +96,5 @@ var Add = func(conv hanu.ConversationInterface) {
 	if count > 1 {
 		flexion = "ы"
 	}
-	conv.Reply("Успешно добавлен%s (`!pull` — _отправить_ в `%s`)", flexion, util.PathKmis)
+	conv.Reply("Успешно добавлен%s (`!pull` — _отправить_ в `%s`)", flexion, util.SrcDir)
 }

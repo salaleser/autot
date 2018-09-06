@@ -11,7 +11,8 @@ var Status = func(conv hanu.ConversationInterface) {
 
 	if len(util.Files) == 0 {
 		text = "Список отправляемых файлов пуст"
-		conv.Reply("```%s```\n(`!add <имя_файла>` — добавить файл)", text)
+		const addCommandName = "`!add <имя_файла>`"
+		conv.Reply("```%s```\n(%s — добавить файл)", text, addCommandName)
 		return
 	}
 
@@ -23,5 +24,8 @@ var Status = func(conv hanu.ConversationInterface) {
 		}
 		text += key + ". " + value + alias + "\n"
 	}
-	conv.Reply("```%s```\n(`!clear` — очистить список, `!rm <номер_строки>` — удалить файл)", text)
+	const clearCommandName = "`!clear`"
+	const rmCommandName = "`!rm <номер_строки>`"
+	conv.Reply("```%s```\n(%s — очистить список, %s — удалить файл)",
+		text, clearCommandName, rmCommandName)
 }
