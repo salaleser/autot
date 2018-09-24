@@ -33,6 +33,7 @@ func main() {
 			log.Fatal("Неправильный токен! Попробуйте указать токен slack-бота заново.")
 		}
 		go client.Connect(arg)
+		go client.Connect2(arg)
 	}
 
 	go systray.Run(gui.OnReady, gui.OnExit)

@@ -1,11 +1,16 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/nlopes/slack"
+	"github.com/nlopes/slack/slackevents"
 	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/loader"
@@ -27,6 +32,14 @@ var (
 		"*СЛУЖБА ЗАПУСКАЕТСЯ*",
 		"*СЛУЖБА ОСТАНАВЛИВАЕТСЯ*",
 		"*СЛУЖБА ЗАПУЩЕНА*",
+	}
+
+	colors = []string{
+		"Ванильный цвет", // этот элемент никогда не используется
+		gui.Grey,
+		gui.Yellow,
+		gui.Red,
+		gui.Green,
 	}
 
 	timeLog = []int64{
@@ -57,8 +70,9 @@ Reconnect:
 	}
 	log.Println("Подключен!")
 
+	util.Api = slack.New(token) // Второй бот (временно их два одновременно)
+
 	util.ReadFileIntoMap(util.FilenameAliasList, util.Aliases)
-	util.ReadFileIntoMap(util.FilenameUserList, util.Users)
 	util.ReadFileIntoMap(util.FilenameFileList, util.Files)
 
 	log.Println("Загружаю команды...")
@@ -71,6 +85,45 @@ Reconnect:
 	log.Println(len(commands), "команд загружено")
 
 	bot.Listen()
+}
+
+// Connect2 подключает второго бота (более продвинутую библиотеку), который скоро станет основным
+func Connect2(token string) {
+	http.HandleFunc("/events-endpoint", func(w http.ResponseWriter, r *http.Request) {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(r.Body)
+		body := buf.String()
+		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionVerifyToken(&slackevents.TokenComparator{token}))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+
+		if eventsAPIEvent.Type == slackevents.URLVerification {
+			log.Println("eventsAPIEvent.Type == slackevents.URLVerification")
+			var r *slackevents.ChallengeResponse
+			err := json.Unmarshal([]byte(body), &r)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			w.Header().Set("Content-Type", "text")
+			w.Write([]byte(r.Challenge))
+		}
+		if eventsAPIEvent.Type == slackevents.CallbackEvent {
+			log.Println("eventsAPIEvent.Type == slackevents.CallbackEvent")
+			postParams := slack.PostMessageParameters{}
+			innerEvent := eventsAPIEvent.InnerEvent
+			switch ev := innerEvent.Data.(type) {
+			case *slackevents.AppMentionEvent:
+				util.Api.PostMessage(ev.Channel, "Yes, hello.", postParams)
+			case *slackevents.MessageEvent:
+				if ev.Text == "333" {
+					util.Api.PostMessage(ev.Channel, "333?", postParams)
+				}
+			}
+		}
+	})
+	fmt.Println("[nlopes] Server listening")
+	http.ListenAndServe(":3000", nil)
 }
 
 // Loop запускает вечный цикл опроса состояние службы утилитой sc.exe, сравнивает ее
@@ -88,24 +141,33 @@ func Loop() {
 			util.Status = util.StatusStopPending
 		}
 		process(util.Status)
-		cooldownMillis := time.Duration(util.Cooldown) * time.Millisecond
-		time.Sleep(cooldownMillis)
+		cd := time.Duration(util.Cooldown) * time.Millisecond
+		time.Sleep(cd)
 	}
 }
 
-func process(status int) {
-	var n int
-	if status == util.StatusRunning {
+func process(s int) {
+	n := s + 1
+	if s == util.StatusRunning {
 		n = 1
-	} else {
-		n = status + 1
 	}
-	if timeLog[n] >= timeLog[status] {
-		util.Beep(util.Sounds[status])
-		timeLog[status] = time.Now().Unix()
-		gui.Change(status)
-		if util.Conv != nil {
-			util.Conv.Reply(alerts[status])
+	if timeLog[n] >= timeLog[s] {
+		util.Beep(util.Sounds[s])
+		timeLog[s] = time.Now().Unix()
+		gui.Change(s)
+
+		alertChannel, err := util.GetAlertChannel()
+		if err == nil {
+			params := slack.PostMessageParameters{}
+			attachment := slack.Attachment{
+				Color:  colors[s],
+				Text:   alerts[s],
+				Footer: "Оповещение об изменении статуса службы",
+			}
+			params.Attachments = []slack.Attachment{attachment}
+			params.AsUser = true
+
+			util.Api.PostMessage(alertChannel.ID, "", params)
 		}
 	}
 }

@@ -57,11 +57,6 @@ func LoadCommands() []hanu.Command {
 	function = command.ConfigReload
 	commands = append(commands, hanu.NewCommand(name, description, function))
 
-	name = "!hook"
-	description = "включает оповещение об изменении состояния Службы в этот канал"
-	function = command.Hook
-	commands = append(commands, hanu.NewCommand(name, description, function))
-
 	name = "!add <файлы,через,запятую,без,пробелов>"
 	description = "обновляет список отправляемых файлов"
 	function = command.Add
@@ -97,6 +92,11 @@ func LoadCommands() []hanu.Command {
 	name = "\\-"
 	description = "отменить запланированную остановку службы (правильно не `\\-`, а `-`)"
 	function = command.VoteNegative
+	commands = append(commands, hanu.NewCommand(name, description, function))
+
+	name = "!ping"
+	description = "отправляет личное сообщение начальнику ОП о шаблонах"
+	function = command.Ping
 	commands = append(commands, hanu.NewCommand(name, description, function))
 
 	return commands

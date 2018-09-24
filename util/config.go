@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"log"
 	"math/rand"
@@ -13,7 +14,7 @@ import (
 
 	"github.com/faiface/beep/speaker"
 	"github.com/faiface/beep/wav"
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
 )
 
 // Ver содержит номер версии
@@ -22,28 +23,19 @@ const Ver = "0.9.1"
 // TemplateDateFormat содержит формат даты для архива
 const TemplateDateFormat = "2006-01-02_15-04"
 
+const alertChannel = "dominoserver"
+
 // Имена файлов
 const (
 	FilenameConfig    = "autot.cfg"    // имя конфигурационного файла
 	FilenameFileList  = "files.bak"    // имя файла с перечнем отправляемых шаблонов
-	FilenameUserList  = "users.list"   // имя файла с перечнем пользователей
 	FilenameAliasList = "aliases.list" // имя файла с перечнем алиасов шаблонов
-)
-
-// Статусы службы
-const (
-	StatusStopped      = 1 // STOPPED
-	StatusStartPending = 2 // START_PENDING
-	StatusStopPending  = 3 // STOP_PENDING
-	StatusRunning      = 4 // RUNNING
 )
 
 // Списки
 var (
 	Files   = make(map[string]string) // список отправляемых файлов
-	Players = make(map[string]string) // список игроков в КНБ
 	Aliases = make(map[string]string) // список алиасов шаблонов
-	Users   = make(map[string]string) // список пользователей
 	Config  = make(map[string]string) // список ключей и значений настроек
 )
 
@@ -54,8 +46,9 @@ var (
 	// Status содержит код состояния службы
 	Status int // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
 
-	// Conv содержит ссылку на сообщение для оповещения
-	Conv hanu.ConversationInterface
+	// Сделать красиво, пока тут глобальные переменные
+	Api         *slack.Client
+	ArcFullName string
 
 	// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
 	OpStatus chan bool
@@ -71,7 +64,7 @@ var (
 		"", // beep-sound
 	}
 
-	errors = map[int]string{
+	scErrors = map[int]string{
 		5:    "Отказано в доступе.",
 		50:   "Такой запрос не поддерживается.",
 		1060: "Указанная служба не установлена.",
@@ -146,6 +139,26 @@ func Beep(filename string) {
 	s, format, _ := wav.Decode(f)
 	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
 	speaker.Play(s)
+}
+
+// GetAlertChannel возвращает канал для оповещений
+func GetAlertChannel() (slack.Channel, error) {
+	if Api == nil {
+		return slack.Channel{}, errors.New("nlopes/slack.Client is not initialized")
+	}
+
+	channels, err := Api.GetChannels(true)
+	if err != nil {
+		return slack.Channel{}, err
+	}
+
+	for _, channel := range channels {
+		if channel.Name == alertChannel {
+			return channel, nil
+		}
+	}
+
+	return slack.Channel{}, errors.New("Channel \"" + alertChannel + "\" not found")
 }
 
 // DeleteFileList удаляет файл-бэкап списка отправляемых файлов

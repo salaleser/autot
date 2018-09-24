@@ -1,6 +1,9 @@
 package command
 
 import (
+	"fmt"
+
+	"github.com/nlopes/slack"
 	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/util"
 )
@@ -24,8 +27,20 @@ var Status = func(conv hanu.ConversationInterface) {
 		}
 		text += key + ". " + value + alias + "\n"
 	}
-	const clearCommandName = "`!clear`"
-	const rmCommandName = "`!rm <номер_строки>`"
-	conv.Reply("```%s```\n(%s — очистить список, %s — удалить файл)",
-		text, clearCommandName, rmCommandName)
+
+	params := slack.PostMessageParameters{}
+
+	const cmdClear = "`!clear`"
+	const cmdRm = "`!rm <номер_строки>`"
+	footer := fmt.Sprintf("(%s — очистить список, %s — удалить файл)", cmdClear, cmdRm)
+	attachment := slack.Attachment{
+		Color:  "e7ff47",
+		Text:   text,
+		Footer: footer,
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	params.AsUser = true
+
+	util.Api.PostMessage("", "", params)
+	conv.Reply("```%s```", text)
 }
