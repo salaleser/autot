@@ -13,15 +13,17 @@
 ## Необходимые файлы
 Для работы нужен файл настроек `autot.cfg` со следующими ключами:
 ```
-ver=1.0.0
-templateDateFormat=2006-01-02_15-04
-server=\\server-path
-service=service-name
-pathTemp=temp\
-pathData=\\server-path\folder-name\
-pathBackup=\\server-path\folder-name\backup\
-pathKmis=\\server2-path\folder-name
-pathSigned=\\server2-path\folder-name\folder2-name\
-countdown=6
+server=SERVER_NAME
+service=SERVICE_NAME
+data-dir=DATA_DIR
+src-dir=SOURCE_DIR
+dest-dir=DEST_DIR
+countdown=15
 cooldown=500
+stopped-sound=stopped.wav
+start-pending-sound=start_pending.wav
+stop-pending-sound=stop_pending.wav
+started-sound=started.wav
+stop-poll-sound=stop-poll.wav
+beep-sound=beep.wav
 ```
