@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/nlopes/slack"
 	"github.com/sbstjn/hanu"
@@ -21,11 +22,15 @@ var Status = func(conv hanu.ConversationInterface) {
 
 	text = "Список отправляемых файлов:\n"
 	for key, value := range util.Files {
-		alias, ok := util.Aliases[value]
-		if ok {
-			alias = " («" + alias + "»)"
+		for i := 0; i < len(util.Files); i++ { // цикл для сортировки
+			if key == strconv.Itoa(i) {
+				alias, ok := util.Aliases[value]
+				if ok {
+					alias = " («" + alias + "»)"
+				}
+				text += key + ". " + value + alias + "\n"
+			}
 		}
-		text += key + ". " + value + alias + "\n"
 	}
 
 	params := slack.PostMessageParameters{}
@@ -42,5 +47,5 @@ var Status = func(conv hanu.ConversationInterface) {
 	params.AsUser = true
 
 	util.Api.PostMessage("", "", params)
-	conv.Reply("```%s```", text)
+	conv.Reply("```%s```\n%s", text, footer)
 }
