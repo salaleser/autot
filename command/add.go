@@ -50,8 +50,6 @@ var Add = func(conv hanu.ConversationInterface) {
 		return
 	}
 
-	const templateExtension = ".ntf"
-	const databaseExtension = ".nsf"
 	lentgh := len(util.Files)
 	var count int
 	for _, newFilename := range newFilenames {
@@ -60,19 +58,21 @@ var Add = func(conv hanu.ConversationInterface) {
 				continue
 			}
 
-			if patternDatabaseWithoutExtension.MatchString(newFilename) {
-				newFilename = newFilename + databaseExtension
-			} else if patternTemplateWithoutExtension.MatchString(newFilename) {
-				newFilename = newFilename + templateExtension
+			if patternTemplateWithoutExtension.MatchString(newFilename) {
+				newFilename += ".ntf"
+			} else if patternDatabaseWithoutExtension.MatchString(newFilename) {
+				newFilename += ".nsf"
 			}
 
 			isTemplate := patternTemplate.MatchString(newFilename)
 			isDatabase := patternDatabase.MatchString(newFilename)
-			if newFilename == templateFile.Name() {
+			lowerCasedTemplate := strings.ToLower(templateFile.Name())
+			lowerCasedNewFilename := strings.ToLower(newFilename)
+			if lowerCasedTemplate == lowerCasedNewFilename {
 				if isTemplate || isDatabase {
 					count++
 					key := strconv.Itoa(lentgh + count)
-					util.Files[key] = newFilename
+					util.Files[key] = templateFile.Name()
 					continue
 				}
 				conv.Reply("```Файл %s не является шаблоном или БД ПФ!\n```", newFilename)
@@ -81,7 +81,7 @@ var Add = func(conv hanu.ConversationInterface) {
 	}
 
 	if count == 0 {
-		conv.Reply("Ни один файл не прошел проверку (регистр учитывается)")
+		conv.Reply("Ни один файл не прошел проверку")
 		return
 	}
 
@@ -90,7 +90,7 @@ var Add = func(conv hanu.ConversationInterface) {
 		return
 	}
 
-	util.SaveFileList()
+	util.UpdateBackupFile()
 
 	var flexion string
 	if count > 1 {
