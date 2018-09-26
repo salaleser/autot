@@ -18,17 +18,21 @@ import (
 )
 
 // Ver содержит номер версии
-const Ver = "0.9.1"
+const Ver = "0.9.2"
 
 // TemplateDateFormat содержит формат даты для архива
 const TemplateDateFormat = "2006-01-02_15-04"
 
+// alertChannel содержит имя канала для оповещений об изменении статуса службы
 const alertChannel = "dominoserver"
+
+const separator = "=" // разделитель для парсинга файлов
+const name = "sc"     // имя утилиты для запросов
 
 // Имена файлов
 const (
 	FilenameConfig    = "autot.cfg"    // имя конфигурационного файла
-	FilenameFileList  = "files.bak"    // имя файла с перечнем отправляемых шаблонов
+	FilenameBackup    = "files.bak"    // имя файла с перечнем отправляемых шаблонов
 	FilenameAliasList = "aliases.list" // имя файла с перечнем алиасов шаблонов
 )
 
@@ -39,21 +43,21 @@ var (
 	Config  = make(map[string]string) // список ключей и значений настроек
 )
 
+// TODO Сделать красиво, пока тут глобальные переменные
 var (
-	separator = "="  // разделитель для парсинга файлов
-	name      = "sc" // имя утилиты для запросов
+	API         *slack.Client // API содержит ссылку на клиент новой библиотеки (nlopes/slack)
+	ArcFullName string
+)
 
+// Разные переменные
+var (
 	// Status содержит код состояния службы
 	Status int // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
-
-	// Сделать красиво, пока тут глобальные переменные
-	Api         *slack.Client
-	ArcFullName string
 
 	// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
 	OpStatus chan bool
 
-	//Sounds содержит массив со звуковыми файлами
+	// Sounds содержит массив со звуковыми файлами
 	Sounds = []string{
 		"Archspire — Involuntary Doppelgänger.mp3", // этот элемент никогда не используется, а зря
 		"", // stopped-sound
@@ -121,7 +125,7 @@ func ReadFileIntoMap(filename string, _map map[string]string) {
 	}
 }
 
-//RandomNumber возвращает случайное число от нуля до max
+// RandomNumber возвращает случайное число от нуля до max
 func RandomNumber(max int) int {
 	seed := time.Now().UnixNano()
 	source := rand.NewSource(seed)
@@ -143,11 +147,11 @@ func Beep(filename string) {
 
 // GetAlertChannel возвращает канал для оповещений
 func GetAlertChannel() (slack.Channel, error) {
-	if Api == nil {
+	if API == nil {
 		return slack.Channel{}, errors.New("nlopes/slack.Client is not initialized")
 	}
 
-	channels, err := Api.GetChannels(true)
+	channels, err := API.GetChannels(true)
 	if err != nil {
 		return slack.Channel{}, err
 	}
@@ -161,20 +165,18 @@ func GetAlertChannel() (slack.Channel, error) {
 	return slack.Channel{}, errors.New("Channel \"" + alertChannel + "\" not found")
 }
 
-// DeleteFileList удаляет файл-бэкап списка отправляемых файлов
-func DeleteFileList() {
-	if err := os.Remove(FilenameFileList); err != nil {
+// UpdateBackupFile обновляет файл-бэкап списком отправляемых файлов
+func UpdateBackupFile() {
+	if err := os.Remove(FilenameBackup); err != nil {
 		log.Printf("Ошибка при попытке удаления файла бэкапа (%s)", err)
+		return
 	}
-}
 
-// SaveFileList обновляет файл-бэкап списком отправляемых файлов
-func SaveFileList() {
 	var data string
 	for number, filename := range Files {
 		data += number + separator + filename + "\n"
 	}
-	writeToFile(FilenameFileList, os.O_CREATE|os.O_WRONLY, data)
+	writeToFile(FilenameBackup, os.O_CREATE|os.O_WRONLY, data)
 }
 
 func writeToFile(filename string, flag int, data string) {

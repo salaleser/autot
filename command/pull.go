@@ -82,5 +82,5 @@ var Pull = func(conv hanu.ConversationInterface) {
 	conv.Reply("Шаблоны в `%s`.", arcFullName)
 
 	util.Files = map[string]string{}
-	util.DeleteFileList()
+	util.UpdateBackupFile()
 }

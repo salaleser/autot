@@ -36,7 +36,7 @@ var Stop = func(conv hanu.ConversationInterface) {
 			}
 			params.Attachments = []slack.Attachment{attachment}
 			params.AsUser = true
-			util.Api.PostMessage(alertChannel.ID, "", params)
+			util.API.PostMessage(alertChannel.ID, "", params)
 		}
 
 		for i := cd; i > 0; i-- {

@@ -8,6 +8,6 @@ import (
 // Clear содержит функцию, которая очистит список отправляемых файлов и удалит файл-бэкап с диска
 var Clear = func(conv hanu.ConversationInterface) {
 	util.Files = map[string]string{}
-	util.DeleteFileList()
+	util.UpdateBackupFile()
 	conv.Reply("Список файлов очищен.")
 }

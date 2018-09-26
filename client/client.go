@@ -70,10 +70,10 @@ Reconnect:
 	}
 	log.Println("Подключен!")
 
-	util.Api = slack.New(token) // Второй бот (временно их два одновременно)
+	util.API = slack.New(token) // Второй бот (временно их два одновременно)
 
 	util.ReadFileIntoMap(util.FilenameAliasList, util.Aliases)
-	util.ReadFileIntoMap(util.FilenameFileList, util.Files)
+	util.ReadFileIntoMap(util.FilenameBackup, util.Files)
 
 	log.Println("Загружаю команды...")
 	commands := loader.LoadCommands()
@@ -93,7 +93,8 @@ func Connect2(token string) {
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(r.Body)
 		body := buf.String()
-		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionVerifyToken(&slackevents.TokenComparator{token}))
+		event := slackevents.OptionVerifyToken(&slackevents.TokenComparator{token})
+		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), event)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
@@ -114,10 +115,10 @@ func Connect2(token string) {
 			innerEvent := eventsAPIEvent.InnerEvent
 			switch ev := innerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
-				util.Api.PostMessage(ev.Channel, "Yes, hello.", postParams)
+				util.API.PostMessage(ev.Channel, "Yes, hello.", postParams)
 			case *slackevents.MessageEvent:
 				if ev.Text == "333" {
-					util.Api.PostMessage(ev.Channel, "333?", postParams)
+					util.API.PostMessage(ev.Channel, "333?", postParams)
 				}
 			}
 		}
@@ -167,7 +168,7 @@ func process(s int) {
 			params.Attachments = []slack.Attachment{attachment}
 			params.AsUser = true
 
-			util.Api.PostMessage(alertChannel.ID, "", params)
+			util.API.PostMessage(alertChannel.ID, "", params)
 		}
 	}
 }

@@ -2,7 +2,9 @@ package main
 
 // ...
 // TODO Тут будет описание
-// сохранять данные бота в файле на случай вылета
+
+// TODO Сортировать список файлов по ключу
+// TODO не допускать добавления одинаковых файлов
 //
 
 // TODO На данный момент бот не умеет понимать префикс, сейчас префикс захардкожен в сами команды
@@ -20,10 +22,8 @@ import (
 	"salaleser.ru/autot/util"
 )
 
-var ()
-
 func main() {
-	// go gl.StartDriver(appMain)
+	// go gl.StartDriver(appMain) // GUI возможно будет подключен позже
 	util.ReadFileIntoMap(util.FilenameConfig, util.Config)
 	util.ReloadConfig()
 
@@ -32,8 +32,8 @@ func main() {
 		if arg[:5] != "xoxb-" { // TODO добавить проверку паттерном регекспа
 			log.Fatal("Неправильный токен! Попробуйте указать токен slack-бота заново.")
 		}
-		go client.Connect(arg)
-		go client.Connect2(arg)
+		go client.Connect(arg)  // Первый бот (который будет заменен) на github.com/sbstjn/hanu
+		go client.Connect2(arg) // Второй бот на github.com/nlopes/slack
 	}
 
 	go systray.Run(gui.OnReady, gui.OnExit)

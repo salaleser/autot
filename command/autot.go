@@ -24,7 +24,10 @@ var Autot = func(conv hanu.ConversationInterface) {
 		}
 		count++
 	}
+
 	Pull(conv)
+
 	Ping(conv)
+
 	Start(conv)
 }
