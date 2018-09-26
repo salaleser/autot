@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/nlopes/slack"
 	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/util"
 )
@@ -21,8 +20,8 @@ var Status = func(conv hanu.ConversationInterface) {
 	}
 
 	text = "Список отправляемых файлов:\n"
-	for key, value := range util.Files {
-		for i := 0; i < len(util.Files); i++ { // цикл для сортировки
+	for i := 1; i <= len(util.Files); i++ { // цикл для сортировки
+		for key, value := range util.Files {
 			if key == strconv.Itoa(i) {
 				alias, ok := util.Aliases[value]
 				if ok {
@@ -33,19 +32,19 @@ var Status = func(conv hanu.ConversationInterface) {
 		}
 	}
 
-	params := slack.PostMessageParameters{}
+	// params := slack.PostMessageParameters{}
 
 	const cmdClear = "`!clear`"
 	const cmdRm = "`!rm <номер_строки>`"
 	footer := fmt.Sprintf("(%s — очистить список, %s — удалить файл)", cmdClear, cmdRm)
-	attachment := slack.Attachment{
-		Color:  "e7ff47",
-		Text:   text,
-		Footer: footer,
-	}
-	params.Attachments = []slack.Attachment{attachment}
-	params.AsUser = true
+	// attachment := slack.Attachment{
+	// 	Color:  gui.Green,
+	// 	Text:   text,
+	// 	Footer: footer,
+	// }
+	// params.Attachments = []slack.Attachment{attachment}
+	// params.AsUser = true
 
-	util.Api.PostMessage("", "", params)
+	// util.API.PostMessage("", "", params)
 	conv.Reply("```%s```\n%s", text, footer)
 }
