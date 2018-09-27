@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/sbstjn/hanu"
@@ -19,8 +20,20 @@ var Status = func(conv hanu.ConversationInterface) {
 		return
 	}
 
+	// Здесь нужно не количество элементов, а номер последнего ключа (пропуская несуществующие)
+	var lk int
+	for k := range util.Files {
+		ik, err := strconv.Atoi(k)
+		if err != nil {
+			log.Println(err)
+		}
+		if ik > lk {
+			lk = ik
+		}
+	}
+
 	text = "Список отправляемых файлов:\n"
-	for i := 1; i <= len(util.Files); i++ { // цикл для сортировки
+	for i := 1; i <= lk; i++ { // цикл для сортировки
 		for key, value := range util.Files {
 			if key == strconv.Itoa(i) {
 				alias, ok := util.Aliases[value]

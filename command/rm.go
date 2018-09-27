@@ -9,9 +9,6 @@ import (
 
 // Rm удаляет элемент из списка отправляемых файлов по его номеру (ключу в мапе)
 var Rm = func(conv hanu.ConversationInterface) {
-	conv.Reply("Команда работает нестабильно и временно отключена")
-	return
-
 	key, err := conv.String("номер")
 	if err != nil {
 		conv.Reply("```Ошибка!\n%s```", err)

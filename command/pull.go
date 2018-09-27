@@ -10,7 +10,7 @@ import (
 	"salaleser.ru/autot/util"
 )
 
-//Pull содерижт функцию, которая упакует файлы и отправит в папку path-kmis
+// Pull содерижт функцию, которая упакует файлы и отправит в папку path-kmis
 var Pull = func(conv hanu.ConversationInterface) {
 	if util.Status != util.StatusStopped {
 		const errMsg = "Нельзя изменять шаблоны пока служба не остановлена"

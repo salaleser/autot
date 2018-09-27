@@ -132,6 +132,16 @@ func RandomNumber(max int) int {
 	return rand.New(source).Intn(max)
 }
 
+// ContainsFileAlready проверяет есть ли уже в списке отправляемых файлов указанный файл
+func ContainsFileAlready(f string) bool {
+	for _, x := range Files {
+		if strings.ToLower(x) == f {
+			return true
+		}
+	}
+	return false
+}
+
 // Beep воспроизводит звук
 func Beep(filename string) {
 	f, err := os.Open("sounds\\" + filename)

@@ -15,22 +15,22 @@ import (
 var Push = func(conv hanu.ConversationInterface) {
 	if util.Status != util.StatusStopped {
 		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
-		// return // DEBUG
+		return
 	}
 
 	DestDirFiles, err := ioutil.ReadDir(util.DestDir)
 	if err != nil {
-		conv.Reply("```Ошибка при попытке прочитать файлы из папки \"%s\"\n```", util.DestDir, err)
+		conv.Reply("```Ошибка при попытке прочитать файлы из папки %q\n```", util.DestDir, err)
 		return
 	}
 
 	if len(DestDirFiles) == 0 {
-		conv.Reply("```В папке \"%s\" нет файлов```", util.DestDir)
+		conv.Reply("```В папке %q нет файлов```", util.DestDir)
 		return
 	}
 
 	if len(DestDirFiles) > 1 {
-		conv.Reply("```В папке \"%s\" несколько файлов, не могу выбрать```", util.DestDir)
+		conv.Reply("```В папке %q несколько файлов, не могу выбрать```", util.DestDir)
 		return
 	}
 
@@ -52,7 +52,7 @@ var Push = func(conv hanu.ConversationInterface) {
 
 	archive, err := unarr.NewArchive(tempFile)
 	if err != nil {
-		conv.Reply("```Ошибка инициализации архива \"%s\"\n%s```", tempFile, err)
+		conv.Reply("```Ошибка инициализации архива %q\n%s```", tempFile, err)
 		return
 	}
 	defer os.Remove(tempFile)

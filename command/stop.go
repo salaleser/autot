@@ -30,8 +30,8 @@ var Stop = func(conv hanu.ConversationInterface) {
 			params := slack.PostMessageParameters{}
 			attachment := slack.Attachment{
 				Color: gui.Red,
-				Text: "*ВНИМАНИЕ!*\nСлужба будет остановлена через " + strconv.Itoa(cd) +
-					" секунд!",
+				Text: "*ВНИМАНИЕ!*\nСлужба будет остановлена через " +
+					strconv.Itoa(cd) + " секунд!",
 				Footer: "(`-` — отмена)",
 			}
 			params.Attachments = []slack.Attachment{attachment}
