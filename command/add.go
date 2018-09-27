@@ -2,6 +2,7 @@ package command
 
 import (
 	"io/ioutil"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -50,7 +51,18 @@ var Add = func(conv hanu.ConversationInterface) {
 		return
 	}
 
-	lentgh := len(util.Files)
+	// Здесь нужно не количество элементов, а номер последнего ключа (пропуская несуществующие)
+	var lk int
+	for k := range util.Files {
+		ik, err := strconv.Atoi(k)
+		if err != nil {
+			log.Println(err)
+		}
+		if ik > lk {
+			lk = ik
+		}
+	}
+
 	var count int
 	for _, newFilename := range newFilenames {
 		for _, templateFile := range allTemplates {
@@ -58,10 +70,11 @@ var Add = func(conv hanu.ConversationInterface) {
 				continue
 			}
 
-			if patternTemplateWithoutExtension.MatchString(newFilename) {
-				newFilename += ".ntf"
-			} else if patternDatabaseWithoutExtension.MatchString(newFilename) {
+			// Сначала надо проверять БД ПФ!
+			if patternDatabaseWithoutExtension.MatchString(newFilename) {
 				newFilename += ".nsf"
+			} else if patternTemplateWithoutExtension.MatchString(newFilename) {
+				newFilename += ".ntf"
 			}
 
 			isTemplate := patternTemplate.MatchString(newFilename)
@@ -69,13 +82,16 @@ var Add = func(conv hanu.ConversationInterface) {
 			lowerCasedTemplate := strings.ToLower(templateFile.Name())
 			lowerCasedNewFilename := strings.ToLower(newFilename)
 			if lowerCasedTemplate == lowerCasedNewFilename {
+				if util.ContainsFileAlready(lowerCasedNewFilename) {
+					continue
+				}
 				if isTemplate || isDatabase {
 					count++
-					key := strconv.Itoa(lentgh + count)
+					key := strconv.Itoa(lk + count)
 					util.Files[key] = templateFile.Name()
 					continue
 				}
-				conv.Reply("```Файл %s не является шаблоном или БД ПФ!\n```", newFilename)
+				conv.Reply("```Файл %q не является шаблоном или БД ПФ!\n```", newFilename)
 			}
 		}
 	}
