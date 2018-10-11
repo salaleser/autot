@@ -1,19 +1,16 @@
 package client
 
 import (
-	"bytes"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 
-	"github.com/nlopes/slack"
-	"github.com/nlopes/slack/slackevents"
-	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/gui"
-	"salaleser.ru/autot/loader"
+
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/command"
 	"salaleser.ru/autot/util"
 )
 
@@ -51,80 +48,87 @@ var (
 	}
 )
 
-// Connect пытается соединиться с сервером слэка
-func Connect(token string) {
+type handler func(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string)
+
+// Run runs Slack Bot
+func Run(token string) error {
 	gui.SetTitle("Autot Server " + util.Ver)
-
-Reconnect:
-	log.Println("Подключение...")
-	bot, err := hanu.New(token)
-	if err != nil {
-		log.Println(err)
-		fmt.Print("Следующая попытка переподключения через... ")
-		for i := 30; i > 0; i-- {
-			time.Sleep(time.Second)
-			fmt.Print(i, " ")
-		}
-		fmt.Println("0")
-		goto Reconnect
-	}
-	log.Println("Подключен!")
-
-	util.API = slack.New(token) // Второй бот (временно их два одновременно)
-
 	util.ReadFileIntoMap(util.FilenameAliasList, util.Aliases)
 	util.ReadFileIntoMap(util.FilenameBackup, util.Files)
-
-	log.Println("Загружаю команды...")
-	commands := loader.LoadCommands()
-	var cmd hanu.Command
-	for i := 0; i < len(commands); i++ {
-		cmd = commands[i]
-		bot.Register(cmd)
-	}
-	log.Println(len(commands), "команд загружено")
-
-	bot.Listen()
+	util.API = slack.New(token) // Второй бот (временно их два одновременно)
+	rtm := util.API.NewRTM()
+	err := make(chan error)
+	go serveEvents(util.API, rtm, err)
+	go rtm.ManageConnection()
+	return <-err
 }
 
-// Connect2 подключает второго бота (более продвинутую библиотеку), который скоро станет основным
-func Connect2(token string) {
-	http.HandleFunc("/events-endpoint", func(w http.ResponseWriter, r *http.Request) {
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(r.Body)
-		body := buf.String()
-		event := slackevents.OptionVerifyToken(&slackevents.TokenComparator{token})
-		eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), event)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+func serveEvents(c *slack.Client, rtm *slack.RTM, err chan error) {
+	var currentUser string
+	for {
+		select {
+		case msg := <-rtm.IncomingEvents:
+			switch ev := msg.Data.(type) {
+			case *slack.ConnectedEvent:
+				currentUser = fmt.Sprintf("<@%s>", ev.Info.User.ID)
+				log.Printf("Подключен nlopes/slack как %q", currentUser)
+			case *slack.HelloEvent:
 
-		if eventsAPIEvent.Type == slackevents.URLVerification {
-			log.Println("eventsAPIEvent.Type == slackevents.URLVerification")
-			var r *slackevents.ChallengeResponse
-			err := json.Unmarshal([]byte(body), &r)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			w.Header().Set("Content-Type", "text")
-			w.Write([]byte(r.Challenge))
-		}
-		if eventsAPIEvent.Type == slackevents.CallbackEvent {
-			log.Println("eventsAPIEvent.Type == slackevents.CallbackEvent")
-			postParams := slack.PostMessageParameters{}
-			innerEvent := eventsAPIEvent.InnerEvent
-			switch ev := innerEvent.Data.(type) {
-			case *slackevents.AppMentionEvent:
-				util.API.PostMessage(ev.Channel, "Yes, hello.", postParams)
-			case *slackevents.MessageEvent:
-				if ev.Text == "333" {
-					util.API.PostMessage(ev.Channel, "333?", postParams)
-				}
+			case *slack.InvalidAuthEvent:
+				log.Printf("InvalidAuthEvent %+v\n", ev)
+				err <- errors.New("token was not provided")
+			case *slack.ConnectionErrorEvent:
+				log.Printf("ConnectionErrorEvent %+v\n", ev)
+				err <- errors.New("connection error")
+			case *slack.MessageEvent:
+				handleMessageEvent(c, rtm, ev, currentUser)
 			}
 		}
-	})
-	fmt.Println("[nlopes] Server listening")
-	http.ListenAndServe(":3000", nil)
+	}
+}
+
+var handlers = map[string]handler{
+	"!add":     command.AddHandler,
+	"!aliases": command.AliasesHandler,
+	"!autot":   command.AutotHandler,
+	"!clear":   command.ClearHandler,
+	"!config":  command.ConfigHandler,
+	"привет":   command.GreetHandler,
+	"!help":    command.HelpHandler,
+	"!ping":    command.PingHandler,
+	"!pull":    command.PullHandler,
+	// "!push":          command.PushHandler,
+	"!query":         command.QueryHandler,
+	"!config reload": command.ConfigReloadHandler,
+	"!rm":            command.RmHandler,
+	"!start":         command.StartHandler,
+	"!status":        command.StatusHandler,
+	"!stop":          command.StopHandler,
+	"!ver":           command.VerHandler,
+	"-":              command.VoteNegativetHandler,
+}
+
+func handleMessageEvent(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, u string) {
+	cmds := strings.Split(ev.Text, " ")
+	var key string
+	l := len(cmds)
+	switch {
+	case l == 1:
+		key = cmds[0]
+	case l >= 2:
+		if cmds[0] == u {
+			key = cmds[1]
+			cmds = cmds[1:]
+		} else {
+			key = cmds[0]
+		}
+	default:
+		return
+	}
+	if f, ok := handlers[key]; ok {
+		f(c, rtm, ev, cmds)
+		return
+	}
 }
 
 // Loop запускает вечный цикл опроса состояние службы утилитой sc.exe, сравнивает ее
@@ -142,8 +146,7 @@ func Loop() {
 			util.Status = util.StatusStopPending
 		}
 		process(util.Status)
-		cd := time.Duration(util.Cooldown) * time.Millisecond
-		time.Sleep(cd)
+		time.Sleep(time.Duration(util.Cooldown) * time.Millisecond)
 	}
 }
 

@@ -1,22 +1,26 @@
 package command
 
 import (
-	"fmt"
 	"log"
 	"strconv"
 
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Status содержит функцию, которая отобразит список отправляемых файлов
-var Status = func(conv hanu.ConversationInterface) {
-	var text string
-
+// StatusHandler показывает список отправляемых файлов
+func StatusHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	if len(util.Files) == 0 {
-		text = "Список отправляемых файлов пуст"
-		const addCommandName = "`!add <имя_файла>`"
-		conv.Reply("```%s```\n(%s — добавить файл)", text, addCommandName)
+		params := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color:  gui.Orange,
+			Title:  "Список отправляемых файлов пуст",
+			Footer: "*!add <имена_файлов_через_пробелы>* — добавить файл",
+		}
+		params.Attachments = []slack.Attachment{attachment}
+		params.AsUser = true
+		util.API.PostMessage(ev.Channel, "", params)
 		return
 	}
 
@@ -32,7 +36,7 @@ var Status = func(conv hanu.ConversationInterface) {
 		}
 	}
 
-	text = "Список отправляемых файлов:\n"
+	var text string
 	for i := 1; i <= lk; i++ { // цикл для сортировки
 		for key, value := range util.Files {
 			if key == strconv.Itoa(i) {
@@ -45,19 +49,14 @@ var Status = func(conv hanu.ConversationInterface) {
 		}
 	}
 
-	// params := slack.PostMessageParameters{}
-
-	const cmdClear = "`!clear`"
-	const cmdRm = "`!rm <номер_строки>`"
-	footer := fmt.Sprintf("(%s — очистить список, %s — удалить файл)", cmdClear, cmdRm)
-	// attachment := slack.Attachment{
-	// 	Color:  gui.Green,
-	// 	Text:   text,
-	// 	Footer: footer,
-	// }
-	// params.Attachments = []slack.Attachment{attachment}
-	// params.AsUser = true
-
-	// util.API.PostMessage("", "", params)
-	conv.Reply("```%s```\n%s", text, footer)
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Color:  gui.Green,
+		Title:  "Список отправляемых файлов:",
+		Text:   "```" + text + "```",
+		Footer: "`!clear` — очистить список, `!rm <номер_строки>` — удалить файл",
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	params.AsUser = true
+	util.API.PostMessage(ev.Channel, "", params)
 }

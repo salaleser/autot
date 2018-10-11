@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strconv"
 
 	unarr "github.com/gen2brain/go-unarr"
 	"github.com/sbstjn/hanu"
@@ -13,6 +14,18 @@ import (
 // Push содержит функцию, которая распакует архив с подписанными шаблонами из папки и dest-dir
 // копирует с заменой файлы в папку data-dir
 var Push = func(conv hanu.ConversationInterface) {
+	key, err := conv.String("номер")
+	if err != nil {
+		conv.Reply("```Ошибка!\n%s```", err)
+		return
+	}
+
+	n, err := strconv.Atoi(key)
+	if err != nil {
+		conv.Reply("```Ошибка! %q не является числом!\n%s```", key, err)
+		return
+	}
+
 	if util.Status != util.StatusStopped {
 		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
 		return
@@ -30,17 +43,22 @@ var Push = func(conv hanu.ConversationInterface) {
 	}
 
 	if len(DestDirFiles) > 1 {
-		conv.Reply("```В папке %q несколько файлов, не могу выбрать```", util.DestDir)
+		conv.Reply("```В папке %q несколько файлов, не могу выбрать (в разработке)```", util.DestDir)
 		return
 	}
 
 	archivePattern, err := regexp.Compile("^.+\\.7z$")
 	if err != nil {
-		conv.Reply("```Ошибка\n%s```", err)
+		conv.Reply("```Ошибка!\n%s```", err)
 		return
 	}
 
-	signed := DestDirFiles[0]
+	if n > len(DestDirFiles) {
+		conv.Reply("```Файла с номером %d нет в папке```", n)
+		return
+	}
+	n--
+	signed := DestDirFiles[n]
 
 	if !archivePattern.MatchString(signed.Name()) {
 		conv.Reply("```Файл %q не является архивом```", signed.Name())

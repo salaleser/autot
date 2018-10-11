@@ -18,7 +18,7 @@ import (
 )
 
 // Ver содержит номер версии
-const Ver = "0.9.2"
+const Ver = "0.9.5"
 
 // TemplateDateFormat содержит формат даты для архива
 const TemplateDateFormat = "2006-01-02_15-04"

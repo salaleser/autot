@@ -6,20 +6,37 @@ import (
 
 	"github.com/nlopes/slack"
 
-	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Stop сореджит функцию, которая остановит службу
-var Stop = func(conv hanu.ConversationInterface) {
+// StopHandler сореджит функцию, которая остановит службу
+func StopHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	switch util.Status {
 	case util.StatusStopped:
-		conv.Reply("Служба уже остановлена!")
+		warningParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Orange,
+			Title: "Служба уже остановлена!",
+		}
+		warningParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", warningParams)
 	case util.StatusStartPending:
-		conv.Reply("Подождите, служба еще не запущена!")
+		warningParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Orange,
+			Title: "Подождите, служба еще не запущена!",
+		}
+		warningParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", warningParams)
 	case util.StatusStopPending:
-		conv.Reply("Проявите терпение, служба уже останавливается!")
+		warningParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Orange,
+			Title: "Проявите терпение, служба уже останавливается!",
+		}
+		warningParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", warningParams)
 	case util.StatusRunning:
 		cd := util.Countdown
 		util.OpStatus = make(chan bool)
@@ -42,7 +59,13 @@ var Stop = func(conv hanu.ConversationInterface) {
 		for i := cd; i > 0; i-- {
 			select {
 			case <-util.OpStatus:
-				conv.Reply("```Остановка службы отменена```")
+				warningParams := slack.PostMessageParameters{}
+				attachment := slack.Attachment{
+					Color: gui.Orange,
+					Title: "Остановка службы отменена",
+				}
+				warningParams.Attachments = []slack.Attachment{attachment}
+				util.API.PostMessage(ev.Channel, "", warningParams)
 				return
 			default:
 				time.Sleep(time.Second)
@@ -51,7 +74,11 @@ var Stop = func(conv hanu.ConversationInterface) {
 				}
 			}
 		}
-		conv.Reply("Останавливаю…")
+		attachment := slack.Attachment{
+			Color: gui.Green,
+			Title: "Останавливаю…",
+		}
+		params.Attachments = []slack.Attachment{attachment}
 		util.Execute("stop")
 	}
 }

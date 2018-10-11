@@ -1,56 +1,65 @@
 package command
 
 import (
+	"fmt"
 	"strings"
 
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Config содержит функцию, которая отображает настройки из конфигурационного файла
-var Config = func(conv hanu.ConversationInterface) {
-	text := "Текущие настройки:\n"
-	columnWidth := 20
-	for key, value := range util.Config {
-		spaces := columnWidth - len(key)
-		if spaces < 1 {
-			spaces = 1
+// ConfigHandler меняет значение указанного ключа в памяти программы (не на диске)
+func ConfigHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
+	a := strings.Split(ev.Msg.Text, " ")
+
+	if len(a) < 3 {
+		var text string
+		columnWidth := 20
+		for key, value := range util.Config {
+			spaces := columnWidth - len(key)
+			if spaces < 1 {
+				spaces = 1
+			}
+			text += key + strings.Repeat(" ", spaces) + value + "\n"
 		}
-		text += key + strings.Repeat(" ", spaces) + value + "\n"
-	}
-	const configReplaceCommandName = "`!config <key> <value>`"
-	const configReloadCommandName = "`!config reload`"
-	conv.Reply("```%s```\n(%s — изменить настройки, %s — загрузить настройки из файла",
-		text, configReplaceCommandName, configReloadCommandName)
-}
 
-// ConfigReplaceValue содержит функцию, которая заменит значение указанного ключа в памяти программы
-// (не на диске)
-var ConfigReplaceValue = func(conv hanu.ConversationInterface) {
-	key, err := conv.String("key")
-	if err != nil {
-		conv.Reply("```Ошибка!\n%s```", err)
+		params := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Green,
+			Title: "Текущие настройки:",
+			Text:  "```" + text + "```",
+			Footer: "*!config <key> <value>* — изменить настройки," +
+				"*!config reload* — загрузить настройки из файла",
+		}
+		params.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", params)
 		return
 	}
 
-	value, err := conv.String("value")
-	if err != nil {
-		conv.Reply("```Ошибка!\n%s```", err)
-		return
-	}
+	key := a[1]
+	value := a[2]
 
 	_, ok := util.Config[key]
 	if !ok {
-		conv.Reply("```Нет такого ключа```")
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Ошибка!",
+			Text:  "Нет такого ключа",
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 		return
 	}
 	util.Config[key] = value
 	util.ReloadConfig()
-	conv.Reply("Значение ключа `%s` изменено на `%s`", key, value)
-}
 
-// ConfigReload содержит функцию, которая считает настройки из файла и перезапишет ими текущие
-var ConfigReload = func(conv hanu.ConversationInterface) {
-	util.ReadFileIntoMap("config", util.Config)
-	util.ReloadConfig()
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Color: gui.Green,
+		Text:  fmt.Sprintf("Значение ключа `%s` изменено на `%s`", key, value),
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	util.API.PostMessage(ev.Channel, "", params)
 }

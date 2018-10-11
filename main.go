@@ -4,7 +4,6 @@ package main
 // TODO Тут будет описание
 
 // TODO Сортировать список файлов по ключу
-// TODO не допускать добавления одинаковых файлов
 //
 
 // TODO На данный момент бот не умеет понимать префикс, сейчас префикс захардкожен в сами команды
@@ -32,8 +31,7 @@ func main() {
 		if arg[:5] != "xoxb-" { // TODO добавить проверку паттерном регекспа
 			log.Fatal("Неправильный токен! Попробуйте указать токен slack-бота заново.")
 		}
-		go client.Connect(arg)  // Первый бот (который будет заменен) на github.com/sbstjn/hanu
-		go client.Connect2(arg) // Второй бот на github.com/nlopes/slack
+		go client.Run(arg)
 	}
 
 	go systray.Run(gui.OnReady, gui.OnExit)

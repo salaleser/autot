@@ -1,12 +1,13 @@
 package command
 
 import (
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Query содержит функцию, которая вернет сообщение о текущем состоянии службы в текущий канал
-var Query = func(conv hanu.ConversationInterface) {
+// QueryHandler сообщает о текущем состоянии службы
+func QueryHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	isTimeToJoke := util.RandomNumber(100) > 95
 	var text string
 	switch util.Status {
@@ -27,5 +28,11 @@ var Query = func(conv hanu.ConversationInterface) {
 			text = "Служба работает"
 		}
 	}
-	conv.Reply(text)
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Color: gui.Blue,
+		Text:  text,
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	util.API.PostMessage(ev.Channel, "", params)
 }

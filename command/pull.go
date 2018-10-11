@@ -2,26 +2,38 @@ package command
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"os"
 	"time"
 
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Pull содерижт функцию, которая упакует файлы и отправит в папку path-kmis
-var Pull = func(conv hanu.ConversationInterface) {
+// PullHandler содерижт функцию, которая упакует файлы и отправит в папку path-kmis
+func PullHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	if util.Status != util.StatusStopped {
-		const errMsg = "Нельзя изменять шаблоны пока служба не остановлена"
-		conv.Reply("```%s```", errMsg)
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Нельзя изменять шаблоны пока служба не остановлена",
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 		return
 	}
 
 	if len(util.Files) == 0 {
-		const errMsg = "Список пустой!"
-		const addCommandName = "`!add <файл(-ы),через,запятую>`"
-		conv.Reply("```%s```\n%s — добавить файл(-ы)", errMsg, addCommandName)
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Список пустой!",
+			Text:  "*!add <файл(-ы)_через_пробелы>* — добавить файл(-ы)",
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 		return
 	}
 
@@ -31,7 +43,14 @@ var Pull = func(conv hanu.ConversationInterface) {
 	arcFullName := util.SrcDir + "\\" + arcName
 	archiveFile, err := os.Create(arcFullName)
 	if err != nil {
-		conv.Reply("```Ошибка при попытке создать архив!\n%s```", err)
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Ошибка при попытке создать архив!",
+			Text:  err.Error(),
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 	}
 	defer archiveFile.Close()
 
@@ -41,23 +60,41 @@ var Pull = func(conv hanu.ConversationInterface) {
 	for _, filename := range util.Files {
 		file, err := os.Open(util.DataDir + filename)
 		if err != nil {
-			const errMsg = "Ошибка при попытке архивировать шаблоны!"
-			conv.Reply("```%s\n%s```", errMsg, err)
+			errorParams := slack.PostMessageParameters{}
+			attachment := slack.Attachment{
+				Color: gui.Red,
+				Title: "Ошибка при попытке архивировать шаблоны!",
+				Text:  err.Error(),
+			}
+			errorParams.Attachments = []slack.Attachment{attachment}
+			util.API.PostMessage(ev.Channel, "", errorParams)
 			return
 		}
 		defer file.Close()
 
 		info, err := file.Stat()
 		if err != nil {
-			const errMsg = "Ошибка при попытке архивировать шаблоны!"
-			conv.Reply("```%s\n%s```", errMsg, err)
+			errorParams := slack.PostMessageParameters{}
+			attachment := slack.Attachment{
+				Color: gui.Red,
+				Title: "Ошибка при попытке архивировать шаблоны!",
+				Text:  err.Error(),
+			}
+			errorParams.Attachments = []slack.Attachment{attachment}
+			util.API.PostMessage(ev.Channel, "", errorParams)
 			return
 		}
 
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
-			const errMsg = "Ошибка при попытке архивировать шаблоны!"
-			conv.Reply("```%s\n%s```", errMsg, err)
+			errorParams := slack.PostMessageParameters{}
+			attachment := slack.Attachment{
+				Color: gui.Red,
+				Title: "Ошибка при попытке архивировать шаблоны!",
+				Text:  err.Error(),
+			}
+			errorParams.Attachments = []slack.Attachment{attachment}
+			util.API.PostMessage(ev.Channel, "", errorParams)
 			return
 		}
 
@@ -65,21 +102,41 @@ var Pull = func(conv hanu.ConversationInterface) {
 
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
-			const errMsg = "Ошибка при попытке архивировать шаблоны!"
-			conv.Reply("```%s\n%s```", errMsg, err)
+			errorParams := slack.PostMessageParameters{}
+			attachment := slack.Attachment{
+				Color: gui.Red,
+				Title: "Ошибка при попытке архивировать шаблоны!",
+				Text:  err.Error(),
+			}
+			errorParams.Attachments = []slack.Attachment{attachment}
+			util.API.PostMessage(ev.Channel, "", errorParams)
 			return
 		}
 
 		_, err = io.Copy(writer, file)
 		if err != nil {
-			const errMsg = "Ошибка при попытке архивировать шаблоны!"
-			conv.Reply("```%s\n%s```", errMsg, err)
+			errorParams := slack.PostMessageParameters{}
+			attachment := slack.Attachment{
+				Color: gui.Red,
+				Title: "Ошибка при попытке архивировать шаблоны!",
+				Text:  err.Error(),
+			}
+			errorParams.Attachments = []slack.Attachment{attachment}
+			util.API.PostMessage(ev.Channel, "", errorParams)
 			return
 		}
 	}
 
 	util.ArcFullName = arcFullName // временный ужос
-	conv.Reply("Шаблоны в `%s`.", arcFullName)
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Color:     gui.Green,
+		TitleLink: "file://kserver/!Common/КМИС%20ОП/",
+		Title:     fmt.Sprintf("Шаблоны в `%s`.", arcFullName),
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	params.AsUser = true
+	util.API.PostMessage(ev.Channel, "", params)
 
 	util.Files = map[string]string{}
 	util.UpdateBackupFile()

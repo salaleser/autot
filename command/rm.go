@@ -1,33 +1,64 @@
 package command
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Rm удаляет элемент из списка отправляемых файлов по его номеру (ключу в мапе)
-var Rm = func(conv hanu.ConversationInterface) {
-	key, err := conv.String("номер")
-	if err != nil {
-		conv.Reply("```Ошибка!\n%s```", err)
+// RmHandler удаляет элемент из списка отправляемых файлов по его номеру (ключу в мапе)
+func RmHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
+	a := strings.Split(ev.Msg.Text, " ")
+
+	if len(a) < 2 {
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Text:  "Не указан номер",
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 		return
 	}
+	key := a[1]
 	filename := util.Files[key]
 
 	if _, err := strconv.Atoi(key); err != nil {
-		conv.Reply("%q не является числом!", key)
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Ошибка!",
+			Text:  fmt.Sprintf("%q не является числом!", key),
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 		return
 	}
 
 	if len(filename) == 0 {
-		conv.Reply("Файла с номером %s нет в списке!", key)
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Ошибка!",
+			Text:  fmt.Sprintf("Файла с номером %s нет в списке!", key),
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 		return
 	}
 
 	delete(util.Files, key)
 	util.UpdateBackupFile()
 
-	conv.Reply("Файл `%s` удален из списка", filename)
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Color: gui.Blue,
+		Text:  fmt.Sprintf("Файл `%s` удален из списка", filename),
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	util.API.PostMessage(ev.Channel, "", params)
 }

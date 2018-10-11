@@ -1,12 +1,13 @@
 package command
 
 import (
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// Start содержит функцию, которая запустит службу
-var Start = func(conv hanu.ConversationInterface) {
+// StartHandler содержит функцию, которая запустит службу
+func StartHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	var text string
 	switch util.Status {
 	case util.StatusStopped:
@@ -19,5 +20,12 @@ var Start = func(conv hanu.ConversationInterface) {
 	case util.StatusRunning:
 		text = "Служба уже запущена!"
 	}
-	conv.Reply(text)
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Color: gui.Green,
+		Title: text,
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	params.AsUser = true
+	util.API.PostMessage(ev.Channel, "", params)
 }

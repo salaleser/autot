@@ -4,12 +4,11 @@ import (
 	"log"
 
 	"github.com/nlopes/slack"
-	"github.com/sbstjn/hanu"
 	"salaleser.ru/autot/util"
 )
 
-// Ping отправляет начальнику сообщение о файле с шаблонами
-var Ping = func(conv hanu.ConversationInterface) {
+// PingHandler отправляет начальнику сообщение о файле с шаблонами
+func PingHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	user, err := util.API.GetUserByEmail("pravednik@rkmail.ru")
 	if err != nil {
 		log.Printf("%s\n", err)

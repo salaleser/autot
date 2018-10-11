@@ -3,15 +3,15 @@ package command
 import (
 	"strings"
 
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
 	"salaleser.ru/autot/util"
 )
 
-// Aliases содержит функцию, которая отображает известные алиасы шаблонов.
+// AliasesHandler содержит функцию, которая отображает известные алиасы шаблонов.
 // Эти алиасы содержатся в файле "aliases.list"
-var Aliases = func(conv hanu.ConversationInterface) {
-	text := "Список алиасов шаблонов:\n"
-	columnWidth := 26
+func AliasesHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
+	var text string
+	columnWidth := 24
 	for filename, alias := range util.Aliases {
 		spaces := columnWidth - len(filename)
 		if spaces < 1 {
@@ -19,5 +19,11 @@ var Aliases = func(conv hanu.ConversationInterface) {
 		}
 		text += filename + strings.Repeat(" ", spaces) + alias + "\n"
 	}
-	conv.Reply("```%s```", text)
+	params := slack.PostMessageParameters{}
+	attachment := slack.Attachment{
+		Title: "Список алиасов шаблонов:",
+		Text:  "```" + text + "```",
+	}
+	params.Attachments = []slack.Attachment{attachment}
+	util.API.PostMessage(ev.Channel, "", params)
 }

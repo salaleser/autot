@@ -1,15 +1,22 @@
 package command
 
 import (
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/gui"
 	"salaleser.ru/autot/util"
 )
 
-// VoteNegative содержит функцию, которая отменяет остановку службы
-var VoteNegative = func(conv hanu.ConversationInterface) {
+// VoteNegativetHandler отменяет остановку службы
+func VoteNegativetHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	if util.Status == util.StatusRunning {
 		util.OpStatus <- true
 	} else {
-		conv.Reply("```Службу не планировалось останавливать```")
+		errorParams := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color: gui.Red,
+			Title: "Службу не планировалось останавливать",
+		}
+		errorParams.Attachments = []slack.Attachment{attachment}
+		util.API.PostMessage(ev.Channel, "", errorParams)
 	}
 }
