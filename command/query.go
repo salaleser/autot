@@ -2,7 +2,7 @@ package command
 
 import (
 	"github.com/nlopes/slack"
-	"salaleser.ru/autot/gui"
+	"salaleser.ru/autot/poster"
 	"salaleser.ru/autot/util"
 )
 
@@ -28,11 +28,6 @@ func QueryHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data 
 			text = "Служба работает"
 		}
 	}
-	params := slack.PostMessageParameters{}
-	attachment := slack.Attachment{
-		Color: gui.Blue,
-		Text:  text,
-	}
-	params.Attachments = []slack.Attachment{attachment}
-	util.API.PostMessage(ev.Channel, "", params)
+
+	poster.Post(ev.Channel, "", text, "")
 }

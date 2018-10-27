@@ -5,22 +5,15 @@ import (
 	"strconv"
 
 	"github.com/nlopes/slack"
-	"salaleser.ru/autot/gui"
+	"salaleser.ru/autot/poster"
 	"salaleser.ru/autot/util"
 )
 
 // StatusHandler показывает список отправляемых файлов
 func StatusHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	if len(util.Files) == 0 {
-		params := slack.PostMessageParameters{}
-		attachment := slack.Attachment{
-			Color:  gui.Orange,
-			Title:  "Список отправляемых файлов пуст",
-			Footer: "*!add <имена_файлов_через_пробелы>* — добавить файл",
-		}
-		params.Attachments = []slack.Attachment{attachment}
-		params.AsUser = true
-		util.API.PostMessage(ev.Channel, "", params)
+		poster.PostWarning(ev.Channel, "Список отправляемых файлов пуст", "",
+			"`!add <имена_файлов_через_пробелы>` — добавить один или несколько файлов")
 		return
 	}
 
@@ -49,14 +42,6 @@ func StatusHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data
 		}
 	}
 
-	params := slack.PostMessageParameters{}
-	attachment := slack.Attachment{
-		Color:  gui.Green,
-		Title:  "Список отправляемых файлов:",
-		Text:   "```" + text + "```",
-		Footer: "`!clear` — очистить список, `!rm <номер_строки>` — удалить файл",
-	}
-	params.Attachments = []slack.Attachment{attachment}
-	params.AsUser = true
-	util.API.PostMessage(ev.Channel, "", params)
+	poster.Post(ev.Channel, "Список отправляемых файлов:",
+		"```"+text+"```", "`!clear` — очистить список, `!rm <номер_строки>` — удалить файл")
 }

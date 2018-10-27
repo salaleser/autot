@@ -1,67 +1,74 @@
 package command
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
 
 	unarr "github.com/gen2brain/go-unarr"
-	"github.com/sbstjn/hanu"
+	"github.com/nlopes/slack"
+	"salaleser.ru/autot/poster"
 	"salaleser.ru/autot/util"
 )
 
-// Push содержит функцию, которая распакует архив с подписанными шаблонами из папки и dest-dir
-// копирует с заменой файлы в папку data-dir
-var Push = func(conv hanu.ConversationInterface) {
-	key, err := conv.String("номер")
-	if err != nil {
-		conv.Reply("```Ошибка!\n%s```", err)
+// PushHandler распаковывает архив с подписанными шаблонами из папки и dest-dir копирует с заменой
+// файлы в папку data-dir
+func PushHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
+	if len(data) < 2 {
+		poster.PostError(ev.Channel, "Ошибка!", "Не указан номер файла в папке")
 		return
 	}
+	key := data[1]
 
 	n, err := strconv.Atoi(key)
 	if err != nil {
-		conv.Reply("```Ошибка! %q не является числом!\n%s```", key, err)
+		poster.PostError(ev.Channel, "Ошибка!", fmt.Sprintf("%q не является числом!", key))
 		return
 	}
 
 	if util.Status != util.StatusStopped {
-		conv.Reply("```Нельзя изменять шаблоны пока служба не остановлена```")
+		poster.PostError(ev.Channel, "Ошибка!",
+			"Нельзя изменять шаблоны пока служба не остановлена")
 		return
 	}
 
 	DestDirFiles, err := ioutil.ReadDir(util.DestDir)
 	if err != nil {
-		conv.Reply("```Ошибка при попытке прочитать файлы из папки %q\n```", util.DestDir, err)
+		poster.PostError(ev.Channel, fmt.Sprintf("Ошибка при попытке прочитать файлы из папки %s!",
+			util.DataDir), err.Error())
 		return
 	}
 
 	if len(DestDirFiles) == 0 {
-		conv.Reply("```В папке %q нет файлов```", util.DestDir)
+		poster.PostError(ev.Channel, "Ошибка!", fmt.Sprintf("В папке %q нет файлов", util.DataDir))
 		return
 	}
 
 	if len(DestDirFiles) > 1 {
-		conv.Reply("```В папке %q несколько файлов, не могу выбрать (в разработке)```", util.DestDir)
+		poster.PostError(ev.Channel, "Ошибка!",
+			fmt.Sprintf("В папке %q несколько файлов, не могу выбрать (в разработке)",
+				util.DestDir))
 		return
 	}
 
 	archivePattern, err := regexp.Compile("^.+\\.7z$")
 	if err != nil {
-		conv.Reply("```Ошибка!\n%s```", err)
+		poster.PostError(ev.Channel, "Ошибка!", err.Error())
 		return
 	}
 
 	if n > len(DestDirFiles) {
-		conv.Reply("```Файла с номером %d нет в папке```", n)
+		poster.PostError(ev.Channel, "Ошибка!", fmt.Sprintf("Файла с номером %d нет в папке", n))
 		return
 	}
 	n--
 	signed := DestDirFiles[n]
 
 	if !archivePattern.MatchString(signed.Name()) {
-		conv.Reply("```Файл %q не является архивом```", signed.Name())
+		poster.PostError(ev.Channel, "Ошибка!",
+			fmt.Sprintf("Файл %q не является архивом", signed.Name()))
 		return
 	}
 
@@ -70,16 +77,16 @@ var Push = func(conv hanu.ConversationInterface) {
 
 	archive, err := unarr.NewArchive(tempFile)
 	if err != nil {
-		conv.Reply("```Ошибка инициализации архива %q\n%s```", tempFile, err)
+		poster.PostError(ev.Channel, fmt.Sprintf("Ошибка инициализации архива %q", tempFile), err.Error())
 		return
 	}
 	defer os.Remove(tempFile)
 	defer archive.Close()
 
 	if err = archive.Extract(util.DataDir); err != nil {
-		conv.Reply("```Ошибка при попытке распаковки архива\n%s```", err)
+		poster.PostError(ev.Channel, "Ошибка при попытке распаковки архива", err.Error())
 		return
 	}
 
-	conv.Reply("_Установка подписанных шаблонов завершена успешно_")
+	poster.Post(ev.Channel, "Установка подписанных шаблонов завершена успешно", "", "")
 }

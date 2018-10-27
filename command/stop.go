@@ -6,37 +6,19 @@ import (
 
 	"github.com/nlopes/slack"
 
-	"salaleser.ru/autot/gui"
+	"salaleser.ru/autot/poster"
 	"salaleser.ru/autot/util"
 )
 
-// StopHandler сореджит функцию, которая остановит службу
+// StopHandler останавливает службу
 func StopHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	switch util.Status {
 	case util.StatusStopped:
-		warningParams := slack.PostMessageParameters{}
-		attachment := slack.Attachment{
-			Color: gui.Orange,
-			Title: "Служба уже остановлена!",
-		}
-		warningParams.Attachments = []slack.Attachment{attachment}
-		util.API.PostMessage(ev.Channel, "", warningParams)
+		poster.PostWarning(ev.Channel, "Служба уже остановлена!", "", "")
 	case util.StatusStartPending:
-		warningParams := slack.PostMessageParameters{}
-		attachment := slack.Attachment{
-			Color: gui.Orange,
-			Title: "Подождите, служба еще не запущена!",
-		}
-		warningParams.Attachments = []slack.Attachment{attachment}
-		util.API.PostMessage(ev.Channel, "", warningParams)
+		poster.PostWarning(ev.Channel, "Подождите, служба еще не запущена!", "", "")
 	case util.StatusStopPending:
-		warningParams := slack.PostMessageParameters{}
-		attachment := slack.Attachment{
-			Color: gui.Orange,
-			Title: "Проявите терпение, служба уже останавливается!",
-		}
-		warningParams.Attachments = []slack.Attachment{attachment}
-		util.API.PostMessage(ev.Channel, "", warningParams)
+		poster.PostWarning(ev.Channel, "Проявите терпение, служба уже останавливается!", "", "")
 	case util.StatusRunning:
 		cd := util.Countdown
 		util.OpStatus = make(chan bool)
@@ -44,28 +26,14 @@ func StopHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data [
 
 		alertChannel, err := util.GetAlertChannel()
 		if err == nil {
-			params := slack.PostMessageParameters{}
-			attachment := slack.Attachment{
-				Color: gui.Red,
-				Text: "*ВНИМАНИЕ!*\nСлужба будет остановлена через " +
-					strconv.Itoa(cd) + " секунд!",
-				Footer: "(`-` — отмена)",
-			}
-			params.Attachments = []slack.Attachment{attachment}
-			params.AsUser = true
-			util.API.PostMessage(alertChannel.ID, "", params)
+			poster.PostWarning(alertChannel.ID, "ВНИМАНИЕ!",
+				"Служба будет остановлена через "+strconv.Itoa(cd)+" секунд!", "`-` — отмена")
 		}
 
 		for i := cd; i > 0; i-- {
 			select {
 			case <-util.OpStatus:
-				warningParams := slack.PostMessageParameters{}
-				attachment := slack.Attachment{
-					Color: gui.Orange,
-					Title: "Остановка службы отменена",
-				}
-				warningParams.Attachments = []slack.Attachment{attachment}
-				util.API.PostMessage(ev.Channel, "", warningParams)
+				poster.Post(ev.Channel, "Остановка службы отменена", "", "")
 				return
 			default:
 				time.Sleep(time.Second)
@@ -74,11 +42,6 @@ func StopHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data [
 				}
 			}
 		}
-		attachment := slack.Attachment{
-			Color: gui.Green,
-			Title: "Останавливаю…",
-		}
-		params.Attachments = []slack.Attachment{attachment}
 		util.Execute("stop")
 	}
 }

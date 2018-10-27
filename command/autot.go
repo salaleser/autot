@@ -5,12 +5,17 @@ import (
 	"time"
 
 	"github.com/nlopes/slack"
-	"salaleser.ru/autot/gui"
+	"salaleser.ru/autot/poster"
 	"salaleser.ru/autot/util"
 )
 
-// AutotHandler сореджит функцию, которая остановит службу, запакует и скопирует шаблоны и запустит службу
+// AutotHandler останавливает службу, пакует и копирует шаблоны и запускает службу
 func AutotHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
+	if len(data) > 1 {
+		ClearHandler(c, rtm, ev, data)
+		AddHandler(c, rtm, ev, data)
+	}
+
 	StopHandler(c, rtm, ev, data)
 
 	var count int
@@ -19,15 +24,10 @@ func AutotHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data 
 	for util.Status != util.StatusStopped {
 		time.Sleep(time.Second)
 		if count > timeout {
-			errorParams := slack.PostMessageParameters{}
-			attachment := slack.Attachment{
-				Color: gui.Red,
-				Title: fmt.Sprintf("Превышено время ожидания (%d с). Служба останавливается слишком долго. "+
-					"Попробуйте запустить отправку командой `!pull` вручную после остановки службы, "+
-					"или перезапустите команду `!autot` немного позже", timeout),
-			}
-			errorParams.Attachments = []slack.Attachment{attachment}
-			util.API.PostMessage(ev.Channel, "", errorParams)
+			text := fmt.Sprintf("Превышено время ожидания (%d с). Служба останавливается слишком "+
+				"долго. Попробуйте запустить отправку командой `!pull` вручную после остановки "+
+				"службы, или перезапустите команду `!autot` немного позже", timeout)
+			poster.PostError(ev.Channel, "Ошибка при попытке остановки службы!", text)
 			return
 		}
 		count++

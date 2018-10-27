@@ -4,10 +4,11 @@ import (
 	"strings"
 
 	"github.com/nlopes/slack"
+	"salaleser.ru/autot/poster"
 	"salaleser.ru/autot/util"
 )
 
-// AliasesHandler содержит функцию, которая отображает известные алиасы шаблонов.
+// AliasesHandler отображает известные алиасы шаблонов.
 // Эти алиасы содержатся в файле "aliases.list"
 func AliasesHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	var text string
@@ -19,11 +20,5 @@ func AliasesHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, dat
 		}
 		text += filename + strings.Repeat(" ", spaces) + alias + "\n"
 	}
-	params := slack.PostMessageParameters{}
-	attachment := slack.Attachment{
-		Title: "Список алиасов шаблонов:",
-		Text:  "```" + text + "```",
-	}
-	params.Attachments = []slack.Attachment{attachment}
-	util.API.PostMessage(ev.Channel, "", params)
+	poster.Post(ev.Channel, "Список зарегистрированных алиасов шаблонов:", "```"+text+"```", "")
 }

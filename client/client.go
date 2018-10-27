@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"salaleser.ru/autot/command"
 	"salaleser.ru/autot/gui"
+	"salaleser.ru/autot/poster"
 
 	"github.com/nlopes/slack"
-	"salaleser.ru/autot/command"
 	"salaleser.ru/autot/util"
 )
 
@@ -48,14 +49,12 @@ var (
 	}
 )
 
-type handler func(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string)
-
 // Run runs Slack Bot
 func Run(token string) error {
 	gui.SetTitle("Autot Server " + util.Ver)
 	util.ReadFileIntoMap(util.FilenameAliasList, util.Aliases)
 	util.ReadFileIntoMap(util.FilenameBackup, util.Files)
-	util.API = slack.New(token) // Второй бот (временно их два одновременно)
+	util.API = slack.New(token)
 	rtm := util.API.NewRTM()
 	err := make(chan error)
 	go serveEvents(util.API, rtm, err)
@@ -87,25 +86,32 @@ func serveEvents(c *slack.Client, rtm *slack.RTM, err chan error) {
 	}
 }
 
-var handlers = map[string]handler{
-	"!add":     command.AddHandler,
-	"!aliases": command.AliasesHandler,
-	"!autot":   command.AutotHandler,
-	"!clear":   command.ClearHandler,
-	"!config":  command.ConfigHandler,
-	"привет":   command.GreetHandler,
-	"!help":    command.HelpHandler,
-	"!ping":    command.PingHandler,
-	"!pull":    command.PullHandler,
-	// "!push":          command.PushHandler,
-	"!query":         command.QueryHandler,
-	"!config reload": command.ConfigReloadHandler,
-	"!rm":            command.RmHandler,
-	"!start":         command.StartHandler,
-	"!status":        command.StatusHandler,
-	"!stop":          command.StopHandler,
-	"!ver":           command.VerHandler,
-	"-":              command.VoteNegativetHandler,
+type handler func(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string)
+
+// Command описывает команду
+type Command struct {
+	Hanlder handler
+	Help    string
+}
+
+var handlers = map[string]Command{
+	"!add":           Command{command.AddHandler, "Добавляет файл в список _отправляемых_ файлов"},
+	"!aliases":       Command{command.AliasesHandler, "Показывает список алиасов шаблонов"},
+	"!autot":         Command{command.AutotHandler, "Останавливает службу, пакует и копирует шаблоны и запускает службу"},
+	"!clear":         Command{command.ClearHandler, "Очищает список _отправляемых_ файлов"},
+	"!config":        Command{command.ConfigHandler, "Показывает текущие настройки"},
+	"привет":         Command{command.GreetHandler, ""},
+	"!ping":          Command{command.PingHandler, "Отправляет начальнику сообщение об _отправленных_ файлах"},
+	"!pull":          Command{command.PullHandler, "_Отправляет_ файлы"},
+	"!push":          Command{command.PushHandler, "_Ставит_ подписанные шаблоны"},
+	"!query":         Command{command.QueryHandler, "Показывает текущее состояние службы"},
+	"!config reload": Command{command.ConfigReloadHandler, "Перезагружает настройки из файла в память"},
+	"!rm":            Command{command.RmHandler, "Удаляет указанный по номеру файл из списка _отправляемых_ файлов"},
+	"!start":         Command{command.StartHandler, "Запускает службу"},
+	"!status":        Command{command.StatusHandler, "Показывает список _отправляемых_ файлов"},
+	"!stop":          Command{command.StopHandler, "Останавливает службу"},
+	"!ver":           Command{command.VerHandler, "Показывает краткую информацию о боте"},
+	"-":              Command{command.VoteNegativetHandler, "Отменяет запланированную остановку службы"},
 }
 
 func handleMessageEvent(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, u string) {
@@ -125,10 +131,55 @@ func handleMessageEvent(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent,
 	default:
 		return
 	}
+	if key == "!help" {
+		go handleHelp(c, rtm, ev, cmds)
+	}
 	if f, ok := handlers[key]; ok {
-		f(c, rtm, ev, cmds)
+		go f.Hanlder(c, rtm, ev, cmds)
 		return
 	}
+
+	if len(key) > 0 && key[0] == '!' {
+		poster.PostWarning(ev.Channel, fmt.Sprintf("Команда «%s» не поддерживается", key),
+			"", "`!help` — список поддерживаемых команд")
+	}
+}
+
+func handleHelp(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, args []string) {
+	if len(args) == 1 {
+		var text string
+		for name, command := range handlers {
+			text += "`" + name + "` — " + command.Help + "\n"
+		}
+		poster.Post(ev.Channel, "Список зарегистрированных команд:", text,
+			"`!help <имя_команды>` — подробное описание команды")
+		return
+	}
+
+	// if args[1][0] != '!' {
+	// 	args[1] = "!" + args[1]
+	// }
+
+	if f, ok := handlers[args[1]]; ok {
+		if f.Help == "" {
+			text := ""
+			footer := ""
+			isKompotStyle := util.RandomNumber(100) > 80
+			if isKompotStyle {
+				text = "Помощи «нигде нет». Просто слов нет. Найдем слова – сделаем помощь." +
+					" Вы держитесь здесь, вам всего доброго, хорошего настроения и здоровья."
+				footer = "© Компот"
+			}
+			poster.PostWarning(ev.Channel, fmt.Sprintf("Команда «%s» не поддерживается", args[1]),
+				text, footer)
+			return
+		}
+
+		poster.Post(ev.Channel, "Описание команды «"+args[1]+"»:", f.Help, "")
+		return
+	}
+
+	poster.PostWarning(ev.Channel, fmt.Sprintf("Команда «%s» не поддерживается", args[1]), "", "")
 }
 
 // Loop запускает вечный цикл опроса состояние службы утилитой sc.exe, сравнивает ее
@@ -157,8 +208,13 @@ func process(s int) {
 	}
 	if timeLog[n] >= timeLog[s] {
 		util.Beep(util.Sounds[s])
-		timeLog[s] = time.Now().Unix()
 		gui.Change(s)
+		timeLog[s] = time.Now().Unix()
+
+		// для первого запуска
+		if timeLog[1]+timeLog[2]+timeLog[3] == 0 {
+			return
+		}
 
 		alertChannel, err := util.GetAlertChannel()
 		if err == nil {

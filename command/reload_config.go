@@ -5,7 +5,7 @@ import (
 	"salaleser.ru/autot/util"
 )
 
-// ConfigReloadHandler содержит функцию, которая считает настройки из файла и перезапишет ими текущие
+// ConfigReloadHandler считывает настройки из файла и перезаписывает ими текущие в памяти
 func ConfigReloadHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []string) {
 	util.ReadFileIntoMap("config", util.Config)
 	util.ReloadConfig()
