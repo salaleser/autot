@@ -95,12 +95,18 @@ type Command struct {
 }
 
 var handlers = map[string]Command{
-	"!add":           Command{command.AddHandler, "Добавляет файл в список _отправляемых_ файлов"},
-	"!aliases":       Command{command.AliasesHandler, "Показывает список алиасов шаблонов"},
-	"!autot":         Command{command.AutotHandler, "Останавливает службу, пакует и копирует шаблоны и запускает службу"},
+	"!add": Command{command.AddHandler,
+		"Добавляет файл в список _отправляемых_ файлов." +
+			"\nИспользование: `!add имя_файла [core | имена_файлов]`" +
+			"\ncore -- заменяется на файлы ядра"},
+	"!aliases": Command{command.AliasesHandler,
+		"Показывает список алиасов шаблонов"},
+	"!autot": Command{command.AutotHandler,
+		"Останавливает службу, пакует и копирует шаблоны и запускает службу." +
+			"\nИспользование: `!autot [имя_файла]`"},
 	"!clear":         Command{command.ClearHandler, "Очищает список _отправляемых_ файлов"},
 	"!config":        Command{command.ConfigHandler, "Показывает текущие настройки"},
-	"привет":         Command{command.GreetHandler, ""},
+	"привет":         Command{command.GreetHandler, "Отвечает приветствием"},
 	"!ping":          Command{command.PingHandler, "Отправляет начальнику сообщение об _отправленных_ файлах"},
 	"!pull":          Command{command.PullHandler, "_Отправляет_ файлы"},
 	"!push":          Command{command.PushHandler, "_Ставит_ подписанные шаблоны"},
@@ -139,7 +145,7 @@ func handleMessageEvent(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent,
 		return
 	}
 
-	if len(key) > 0 && key[0] == '!' {
+	if len(key) > 0 && key[0] == '!' && key != "!help" {
 		poster.PostWarning(ev.Channel, fmt.Sprintf("Команда «%s» не поддерживается", key),
 			"", "`!help` — список поддерживаемых команд")
 	}
@@ -155,10 +161,6 @@ func handleHelp(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, args []
 			"`!help <имя_команды>` — подробное описание команды")
 		return
 	}
-
-	// if args[1][0] != '!' {
-	// 	args[1] = "!" + args[1]
-	// }
 
 	if f, ok := handlers[args[1]]; ok {
 		if f.Help == "" {
@@ -211,7 +213,7 @@ func process(s int) {
 		gui.Change(s)
 		timeLog[s] = time.Now().Unix()
 
-		// для первого запуска
+		// Состояние службы при первом запуске не публиковать
 		if timeLog[1]+timeLog[2]+timeLog[3] == 0 {
 			return
 		}
