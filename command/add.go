@@ -67,60 +67,63 @@ func AddHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []
 	}
 
 	var accepted []string
-	var refused []string
 	var duplicates []string
-	for _, arg := range args {
+	var refused []string
+	for arg := range args {
+		var isAcceptedOrDuplicate bool
 		for _, file := range files {
 			if file.IsDir() {
 				continue
 			}
 
-			// Сначала надо проверять БД ПФ!
-			if patternDatabaseWithoutExtension.MatchString(arg) {
-				arg += ".nsf"
+			var argWithExtension string
+			if patternDatabaseWithoutExtension.MatchString(arg) { // Сначала проверять на БД ПФ!
+				argWithExtension = arg + ".nsf"
 			} else if patternTemplateWithoutExtension.MatchString(arg) {
-				arg += ".ntf"
+				argWithExtension = arg + ".ntf"
 			}
 
-			isTemplate := patternTemplate.MatchString(arg)
-			isDatabase := patternDatabase.MatchString(arg)
-			lowerCasedArg := strings.ToLower(arg)
+			isTemplate := patternTemplate.MatchString(argWithExtension)
+			isDatabase := patternDatabase.MatchString(argWithExtension)
+			lowerCasedArg := strings.ToLower(argWithExtension)
 			lowerCasedFilename := strings.ToLower(file.Name())
 			if lowerCasedFilename == lowerCasedArg {
 				if util.ContainsFileAlready(lowerCasedArg) {
 					duplicates = append(duplicates, file.Name())
-					for i := 0; i < len(args); i++ {
-						if args[i] != file.Name() {
-							refused = append(refused, file.Name())
-						}
-					}
+					isAcceptedOrDuplicate = true
 					continue
 				}
 				if isTemplate || isDatabase {
 					key := strconv.Itoa(lk + len(accepted) + 1)
 					accepted = append(accepted, file.Name())
 					util.Files[key] = file.Name()
-					for i := 0; i < len(args); i++ {
-						if args[i] != file.Name() {
-							refused = append(refused, file.Name())
-						}
-					}
+					isAcceptedOrDuplicate = true
 					continue
 				}
 			}
 		}
+		if !isAcceptedOrDuplicate {
+			refused = append(refused, arg)
+		}
 	}
 	util.UpdateBackupFile()
 
+	// for arg := range args {
+	// 	if !hasElement(accepted, arg) && !hasElement(duplicates, arg) {
+	// 		refused = append(refused, arg)
+	// 	}
+	// }
+
 	if len(accepted) == 0 {
-		text := fmt.Sprintf("Уже были добавлены ранее: %v\n", duplicates)
+		text := fmt.Sprintf("Уже были добавлены ранее: %v\nНе прошли проверку: %v",
+			duplicates, refused)
 		poster.PostWarning(channel, "Ни один новый файл не добавлен!", text, "")
 		return
 	}
 
 	if len(accepted) != len(args) {
-		text := fmt.Sprintf("Добавлены сейчас: %v\nУже были добавлены ранее: %v",
-			accepted, duplicates)
+		text := fmt.Sprintf("Добавлены сейчас: %v\nУже были добавлены ранее: %v\n"+
+			"Не прошли проверку: %v", accepted, duplicates, refused)
 		poster.PostWarning(channel, "Не все файлы добавлены!", text, "")
 		return
 	}
@@ -136,15 +139,24 @@ func AddHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []
 	poster.Post(channel, title, text, footer)
 }
 
-func expandCore(a []string) []string {
-	var args []string
+func hasElement(array []string, element string) bool {
+	for _, e := range array {
+		if element == e {
+			return true
+		}
+	}
+	return false
+}
+
+func expandCore(a []string) map[string]int {
+	var args = make(map[string]int)
 	for i := 1; i < len(a); i++ {
-		args = append(args, a[i])
+		args[a[i]] = 0
 		if a[i] == "core" {
-			args = append(args, "MKAmbul2.ntf")
-			args = append(args, "MKAmbul2M.ntf")
-			args = append(args, "MKCurrent2.ntf")
-			args = append(args, "MKArhiv2.ntf")
+			args["MKAmbul2.ntf"] = 0
+			args["MKAmbul2M.ntf"] = 0
+			args["MKCurrent2.ntf"] = 0
+			args["MKArhiv2.ntf"] = 0
 		}
 	}
 	return args
