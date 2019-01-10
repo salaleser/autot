@@ -1,9 +1,13 @@
 package util
 
-// Статусы службы
-const (
-	StatusStopped      = 1 // STOPPED
-	StatusStartPending = 2 // START_PENDING
-	StatusStopPending  = 3 // STOP_PENDING
-	StatusRunning      = 4 // RUNNING
-)
+// StatusStopped содержит статус службы STOPPED
+const StatusStopped = 1
+
+// StatusStartPending содержит статус службы START_PENDING
+const StatusStartPending = 2
+
+// StatusStopPending содержит статус службы STOP_PENDING
+const StatusStopPending = 3
+
+// StatusRunning содержит статус службы RUNNING
+const StatusRunning = 4
