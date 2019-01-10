@@ -27,7 +27,9 @@ func AutotHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data 
 			text := fmt.Sprintf("Превышено время ожидания (%d с). Служба останавливается слишком "+
 				"долго. Попробуйте запустить отправку командой `!pull` вручную после остановки "+
 				"службы, или перезапустите команду `!autot` немного позже", timeout)
-			poster.PostError(ev.Channel, "Ошибка при попытке остановки службы!", text)
+			if util.Status == util.StatusStopPending { // Если остановка была отменена
+				poster.PostError(ev.Channel, "Ошибка при попытке остановки службы!", text)
+			}
 			return
 		}
 		count++
