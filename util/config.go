@@ -18,7 +18,7 @@ import (
 )
 
 // Ver содержит номер версии
-const Ver = "0.9.6"
+const Ver = "0.9.7"
 
 // TemplateDateFormat содержит формат даты для архива
 const TemplateDateFormat = "2006-01-02_15-04"
@@ -36,54 +36,53 @@ const (
 	FilenameAliasList = "aliases.list" // имя файла с перечнем алиасов шаблонов
 )
 
-// Списки
-var (
-	Files   = make(map[string]string) // список отправляемых файлов
-	Aliases = make(map[string]string) // список алиасов шаблонов
-	Config  = make(map[string]string) // список ключей и значений настроек
-)
+// Files содержит список отправляемых файлов
+var Files = make(map[string]string)
 
-// TODO Сделать красиво, пока тут глобальные переменные
-var (
-	API         *slack.Client // API содержит ссылку на клиент новой библиотеки (nlopes/slack)
-	ArcFullName string
-)
+// Aliases содержит список алиасов шаблонов
+var Aliases = make(map[string]string)
 
-// Разные переменные
-var (
-	// Status содержит код состояния службы
-	Status int // 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+// Config содержит список ключей и значений настроек
+var Config = make(map[string]string)
 
-	// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
-	OpStatus chan bool
+// API содержит указатель на клиент nlopes/slack
+var API *slack.Client
 
-	// Sounds содержит массив со звуковыми файлами
-	Sounds = []string{
-		"Archspire — Involuntary Doppelgänger.mp3", // этот элемент никогда не используется, а зря
-		"", // stopped-sound
-		"", // start-pending-sound
-		"", // stop-pending-sound
-		"", // started-sound
-		"", // stop-vote-sound
-		"", // beep-sound
-	}
+// ArcFullName содержит имя архива
+var ArcFullName string // FIXME временный ужос
+
+// Status содержит код состояния службы.
+// 1 -- остановлена, 2 -- запускается, 3 -- останавливается, 4 -- запущена
+var Status int
+
+// OpStatus содержит ссылку на канал для отмены остановки службы командой "-"
+var OpStatus chan bool
+
+// Sounds содержит массив со звуковыми файлами
+var Sounds = []string{
+	"Archspire — Involuntary Doppelgänger.mp3", // этот элемент никогда не используется, а зря
+	"", // stopped-sound
+	"", // start-pending-sound
+	"", // stop-pending-sound
+	"", // started-sound
+	"", // stop-vote-sound
+	"", // beep-sound
+}
 
 /*
-	scErrors = map[int]string{
-		5:    "Отказано в доступе.",
-		50:   "Такой запрос не поддерживается.",
-		1060: "Указанная служба не установлена.",
-		1061: "Служба в настоящее время не может принимать команды.",
-		1062: "Служба не запущена.",
-		1056: "Одна копия службы уже запущена.",
-		1639: "?",
-		1722: "Сервер RPC недоступен.",
-	}
+var scErrors = map[int]string{
+	5:    "Отказано в доступе.",
+	50:   "Такой запрос не поддерживается.",
+	1060: "Указанная служба не установлена.",
+	1061: "Служба в настоящее время не может принимать команды.",
+	1062: "Служба не запущена.",
+	1056: "Одна копия службы уже запущена.",
+	1639: "?",
+	1722: "Сервер RPC недоступен.",
+}
 */
 
-)
-
-// Переменные из конфигурационного файла
+// Одна из переменных конфигурационного файла
 var (
 	server    string // полное имя сервера
 	Service   string // имя службы
