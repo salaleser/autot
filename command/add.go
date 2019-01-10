@@ -108,12 +108,6 @@ func AddHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data []
 	}
 	util.UpdateBackupFile()
 
-	// for arg := range args {
-	// 	if !hasElement(accepted, arg) && !hasElement(duplicates, arg) {
-	// 		refused = append(refused, arg)
-	// 	}
-	// }
-
 	if len(accepted) == 0 {
 		text := fmt.Sprintf("Уже были добавлены ранее: %v\nНе прошли проверку: %v",
 			duplicates, refused)
