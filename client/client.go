@@ -39,15 +39,14 @@ var (
 		gui.Red,
 		gui.Green,
 	}
-
-	timeLog = []int64{
-		0, // этот элемент никогда не используется
-		0, // lastStartPending int64
-		0, // lastStopPending  int64
-		0, // lastStopped      int64
-		0, // lastStarted      int64
-	}
 )
+
+// type timeLog struct {
+// 	lastStartPending int64
+// 	lastStopPending  int64
+// 	lastStopped      int64
+// 	lastStarted      int64
+// }
 
 // Run runs Slack Bot
 func Run(token string) error {
@@ -190,46 +189,45 @@ func Loop() {
 	for {
 		out := util.Execute("query")
 		if strings.Contains(out, statuses[util.StatusRunning]) {
-			util.Status = util.StatusRunning
+			if util.Status != util.StatusRunning {
+				util.Status = util.StatusRunning
+				process(util.Status)
+			}
 		} else if strings.Contains(out, statuses[util.StatusStopped]) {
-			util.Status = util.StatusStopped
+			if util.Status != util.StatusStopped {
+				util.Status = util.StatusStopped
+				process(util.Status)
+			}
 		} else if strings.Contains(out, statuses[util.StatusStartPending]) {
-			util.Status = util.StatusStartPending
+			if util.Status != util.StatusStartPending {
+				util.Status = util.StatusStartPending
+				process(util.Status)
+			}
 		} else if strings.Contains(out, statuses[util.StatusStopPending]) {
-			util.Status = util.StatusStopPending
+			if util.Status != util.StatusStopPending {
+				util.Status = util.StatusStopPending
+				process(util.Status)
+			}
 		}
-		process(util.Status)
 		time.Sleep(time.Duration(util.Cooldown) * time.Millisecond)
 	}
 }
 
 func process(s int) {
-	n := s + 1
-	if s == util.StatusRunning {
-		n = 1
-	}
-	if timeLog[n] >= timeLog[s] {
-		util.Beep(util.Sounds[s])
-		gui.Change(s)
-		timeLog[s] = time.Now().Unix()
+	gui.Change(s)
+	util.Beep(util.Sounds[s])
 
-		// Состояние службы при первом запуске не публиковать
-		if timeLog[1]+timeLog[2]+timeLog[3] == 0 {
-			return
+	alertChannel, err := util.GetAlertChannel()
+	if err == nil {
+		params := slack.PostMessageParameters{}
+		attachment := slack.Attachment{
+			Color:  colors[s],
+			Text:   alerts[s],
+			Footer: "Оповещение об изменении статуса службы",
 		}
+		params.Attachments = []slack.Attachment{attachment}
+		params.AsUser = true
 
-		alertChannel, err := util.GetAlertChannel()
-		if err == nil {
-			params := slack.PostMessageParameters{}
-			attachment := slack.Attachment{
-				Color:  colors[s],
-				Text:   alerts[s],
-				Footer: "Оповещение об изменении статуса службы",
-			}
-			params.Attachments = []slack.Attachment{attachment}
-			params.AsUser = true
-
-			util.API.PostMessage(alertChannel.ID, "", params)
-		}
+		util.API.PostMessage(alertChannel.ID, "", params)
 	}
 }
