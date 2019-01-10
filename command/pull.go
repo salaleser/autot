@@ -75,7 +75,7 @@ func PullHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data [
 		}
 	}
 
-	util.ArcFullName = arcFullName // временный ужос
+	util.ArcFullName = arcFullName // FIXME временный ужос
 	poster.Post(ev.Channel, "Файлы успешно отправлены",
 		fmt.Sprintf("Шаблоны в `%s`.", arcFullName), "file://kserver/!Common/КМИС%20ОП/")
 
