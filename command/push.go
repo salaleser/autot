@@ -36,13 +36,13 @@ func PushHandler(c *slack.Client, rtm *slack.RTM, ev *slack.MessageEvent, data [
 
 	DestDirFiles, err := ioutil.ReadDir(util.DestDir)
 	if err != nil {
-		poster.PostError(ev.Channel, fmt.Sprintf("Ошибка при попытке прочитать файлы из папки %s!",
-			util.DataDir), err.Error())
+		poster.PostError(ev.Channel, fmt.Sprintf("Ошибка при попытке прочитать файлы из папки %q!",
+			util.DestDir), err.Error())
 		return
 	}
 
 	if len(DestDirFiles) == 0 {
-		poster.PostError(ev.Channel, "Ошибка!", fmt.Sprintf("В папке %q нет файлов", util.DataDir))
+		poster.PostError(ev.Channel, "Ошибка!", fmt.Sprintf("В папке %q нет файлов", util.DestDir))
 		return
 	}
 
